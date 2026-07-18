@@ -5,3 +5,4 @@ journal.txt
 *_proto
 /.quarto/
 **/*.quarto_ipynb
+*.bkp

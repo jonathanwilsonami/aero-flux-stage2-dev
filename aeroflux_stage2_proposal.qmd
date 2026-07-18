@@ -18,8 +18,9 @@ format:
 ---
 
 ::: {.callout-note appearance="minimal"}
-**Course:** AIT 614 Sec 001 - **Instructor:** Dr. Duoduo Liao  
-**Institution:** George Mason University - **Author:** Jonathan Wilson
+**Course:** AIT 614 Sec 001
+**Instructor:** Dr. Duoduo Liao
+**Institution:** George Mason University
 :::
 
 # Introduction
