@@ -1,0 +1,22 @@
+---
+title: "About the Team"
+page-navigation: false
+toc: false
+page-layout: full
+
+about:
+  id: hero-heading
+  template: trestles
+  image-width: 70%
+---
+
+:::{#hero-heading}
+
+## [Jonathan Wilson](https://jonathanwil.com) {.fw-bold .text-center .mb-2 .fs-2}
+
+![Jonathan Wilson](/images/about/jon.png){fig-alt="Jonathan Wilson" width="28%" fig-align="center"}
+
+::: {.small .lh-sm}
+I’m an engineer at heart. I grew up working in construction, earned a degree in Applied Statistics and Computer Science from BYU, and have spent more than a decade building software across diverse domains—ranging from DoD satellites, image processing, optimization, and large-scale cybersecurity analytics to network engineering, monitoring, and data platforms. Today, my focus is on designing data architectures and pipelines for modeling, simulation, and analysis of large-scale systems. I am currently pursuing a master’s in Data Analytics Engineering at George Mason University.
+:::
+

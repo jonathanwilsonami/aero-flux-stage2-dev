@@ -1,0 +1,47 @@
+name: aeroflux2-dev
+channels:
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+dependencies:
+  - fastparquet
+  - ipykernel
+  - jupyterlab
+  - jupytext
+  - lightgbm
+  - matplotlib
+  - nb_conda_kernels
+  - numpy
+  - pandas
+  - pip
+  - polars
+  - pyarrow
+  - python=3.11
+  - r-arrow
+  - r-base=4.3
+  - r-broom
+  - r-caret
+  - r-data.table
+  - r-ggraph
+  - r-glmnet
+  - r-here
+  - r-igraph
+  - r-irkernel
+  - r-janitor
+  - r-kableextra
+  - r-knitr
+  - r-lubridate
+  - r-pacman
+  - r-ranger
+  - r-rmarkdown
+  - r-skimr
+  - r-tidygraph
+  - r-tidyverse
+  - r-xgboost
+  - scikit-learn
+  - scipy
+  - seaborn
+  - statsmodels
+  - xgboost
+  - r-vip
+  - networkx
+  - tensorflow

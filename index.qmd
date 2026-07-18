@@ -1,0 +1,7 @@
+---
+title: "Home"
+---
+
+# Welcome
+
+Welcome to the AeroFlux Stage 2 Project website!
