@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Jonathan Wilson">
+<meta name="dcterms.date" content="2026-07-18">
+
+<title>[TEMPLATE] - AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence – AeroFlux Stage 2 Project</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-b758ccaa5987ceb1b75504551e579abf.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-d8a18cee56031974d1f8f6eead200d41.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="dark">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script src="site_libs/quarto-diagram/mermaid.min.js"></script>
+<script src="site_libs/quarto-diagram/mermaid-init.js"></script>
+<link href="site_libs/quarto-diagram/mermaid.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">AeroFlux Stage 2 Project</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="./index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link active" href="./aeroflux_stage2_proposal.html" aria-current="page"> 
+<span class="menu-text">Project Proposal</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction"><span class="header-section-number">1</span> Introduction</a></li>
+  <li><a href="#related-work" id="toc-related-work" class="nav-link" data-scroll-target="#related-work"><span class="header-section-number">2</span> Related Work</a></li>
+  <li><a href="#objectives" id="toc-objectives" class="nav-link" data-scroll-target="#objectives"><span class="header-section-number">3</span> Objectives</a></li>
+  <li><a href="#datasets" id="toc-datasets" class="nav-link" data-scroll-target="#datasets"><span class="header-section-number">4</span> Datasets</a></li>
+  <li><a href="#methodology-and-proposed-solution" id="toc-methodology-and-proposed-solution" class="nav-link" data-scroll-target="#methodology-and-proposed-solution"><span class="header-section-number">5</span> Methodology and Proposed Solution</a></li>
+  <li><a href="#development-environment" id="toc-development-environment" class="nav-link" data-scroll-target="#development-environment"><span class="header-section-number">6</span> Development Environment</a></li>
+  <li><a href="#project-tasks-and-timeline" id="toc-project-tasks-and-timeline" class="nav-link" data-scroll-target="#project-tasks-and-timeline"><span class="header-section-number">7</span> Project Tasks and Timeline</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="aeroflux_stage2_proposal.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">[TEMPLATE] - AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence</h1>
+<p class="subtitle lead">Formal Project Proposal</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Jonathan Wilson </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">July 18, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<div class="callout callout-style-simple callout-note no-icon">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>Course:</strong> AIT 614 Sec 001 - <strong>Instructor:</strong> Dr.&nbsp;Duoduo Liao<br>
+<strong>Institution:</strong> George Mason University - <strong>Author:</strong> Jonathan Wilson</p>
+</div>
+</div>
+</div>
+<section id="introduction" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Introduction</h1>
+<p>Flight delays are among the most costly and disruptive failures in the U.S. National Airspace System (NAS), and they rarely occur in isolation. A single late arrival propagates downstream through the same aircraft’s rotation and through shared airport departure and arrival queues, so a local disturbance becomes a network-wide disruption. Existing airline and airport tools remain largely retrospective or single-source, reporting delays after they occur rather than anticipating them from the live state of the airspace.</p>
+<p><strong>Scope.</strong> AeroFlux Stage 2 builds a <em>scalable, modular, configurable, portable, and decoupled</em> big-data platform that ingests, fuses, processes, and analyzes aviation and weather data in real time. The primary use case is flight-delay prediction; the same architecture is designed to support congestion analysis, delay-propagation modeling, operational monitoring, decision support, and agentic AI. Stage 1 (complete) established a historical machine-learning pipeline and an interactive prototype; Stage 2 adds the live data platform, a baseline-versus-advanced model comparison, and an explainable analyst agent.</p>
+<p><strong>Technical challenges.</strong> Building this platform requires solving several non-trivial problems: (1) ingesting heterogeneous, error-prone streaming sources (FAA SWIM XML, ADS-B, weather) without data loss; (2) <em>entity resolution</em> across systems that share no universal key—for example, the aircraft tail number is not published in SWIM flight data and must be recovered from ADS-B; (3) unstable identifiers, since a flight’s <code>flight_ref</code> changes on plan amendment while its Globally Unique Flight Identifier (GUFI) remains stable; (4) train-serve skew, because historical labels (Bureau of Transportation Statistics) and live features are measured differently; and (5) delivering all of this at demo quality on a portable, low-cost footprint.</p>
+</section>
+<section id="related-work" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Related Work</h1>
+<p><strong>Machine-learning delay prediction.</strong> Most prior work frames delay prediction as supervised classification or regression over historical records. Reviews by Sternberg et al.&nbsp;(2017) and, more recently, the dissecting review in <em>IEEE Transactions on Intelligent Transportation Systems</em> (2025) show tree ensembles and deep networks dominating, with recent studies emphasizing class-imbalance handling (AlBassam &amp; AlShahrani, 2025). Their strength is high accuracy on curated historical data; their limitations are that they are retrospective, typically single-source, and treat flights as independent observations, ignoring the network coupling that drives real disruptions.</p>
+<p><strong>Delay-propagation modeling.</strong> A separate literature models how delays ripple through schedules: Beatty et al.&nbsp;(1999) introduced propagation trees, Wong and Tsai (2012) applied survival models, and Kafle and Zou (2016) proposed an analytical-econometric approach. These capture the ripple mechanism but are generally offline and disconnected from real-time streaming prediction. Belcastro et al.&nbsp;(2016) demonstrated scalable data mining for delay prediction, establishing the value of big-data tooling but not real-time fusion.</p>
+<p><strong>Operational data fusion.</strong> The state of the art in operational systems is NASA’s Airspace Technology Demonstration 2 (ATD-2) <em>Fuser</em> (NASA, 2021), which fuses multiple SWIM sources into a single GUFI-keyed flight record. Its strength is production-grade fused “truth”; its limitation is a heavyweight, largely closed Java stack that is not an open, extensible ML/AI platform.</p>
+<p><strong>Relevance of this approach.</strong> AeroFlux Stage 2 bridges these strands. It couples lightweight, Fuser-inspired real-time fusion and entity resolution with propagation-aware feature engineering <em>and</em> an explainable retrieval-augmented agent—integrating capabilities that the prior literature treats separately.</p>
+</section>
+<section id="objectives" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Objectives</h1>
+<ol type="1">
+<li>Ingest and fuse FAA SWIM, ADS-B, and weather data into a validated, per-flight canonical state in real time.</li>
+<li>Deliver a portable, decoupled platform that runs unchanged on a laptop, school hardware, or any cloud VM (container-first, cloud-agnostic).</li>
+<li>Compare a baseline model against an advanced, propagation- and weather-aware model for arrival-delay prediction.</li>
+<li>Evaluate both <strong>predictive</strong> performance and <strong>system</strong> performance.</li>
+<li>Provide a starter <em>Aviation Operations Analyst Agent</em> that retrieves evidence, explains model predictions, and recommends analytical next steps—without making operational decisions.</li>
+<li>Achieve a demonstrable minimum implementation within approximately one month.</li>
+</ol>
+</section>
+<section id="datasets" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> Datasets</h1>
+<p>The platform fuses four aviation/weather sources plus a documentation corpus, summarized in <a href="#tbl-datasets" class="quarto-xref">Table&nbsp;1</a>. FAA SWIM provides the authoritative live NAS flight state; ADS-B supplies the physical airframe identity (ICAO 24-bit address and registration) needed to link an aircraft’s successive legs; NOAA METAR/TAF supplies weather, a leading delay driver; and the BTS On-Time Performance dataset—which includes actual gate times and tail numbers—provides historical training labels.</p>
+<div id="tbl-datasets" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-datasets-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: Data sources fused by AeroFlux Stage 2.
+</figcaption>
+<div aria-describedby="tbl-datasets-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Source</th>
+<th>Type</th>
+<th>Role</th>
+<th>Retention</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>FAA SWIM (TFMS)</td>
+<td>Streaming XML</td>
+<td>Live flight state (primary)</td>
+<td>48 h</td>
+</tr>
+<tr class="even">
+<td>ADS-B (airplanes.live / adsb.lol)</td>
+<td>Streaming JSON</td>
+<td>Airframe / tail resolution</td>
+<td>48 h</td>
+</tr>
+<tr class="odd">
+<td>NOAA METAR / TAF</td>
+<td>Polled</td>
+<td>Weather features</td>
+<td>48 h</td>
+</tr>
+<tr class="even">
+<td>BTS On-Time Performance</td>
+<td>Historical CSV</td>
+<td>Training labels</td>
+<td>Persistent</td>
+</tr>
+<tr class="odd">
+<td>Aviation docs (FAA, SWIM dict.)</td>
+<td>Documents</td>
+<td>RAG corpus</td>
+<td>Persistent</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<p>A raw SWIM message (abridged) is shown in <a href="#lst-swim" class="quarto-xref">Listing&nbsp;1</a>; the corresponding fused, validated canonical record produced by the ingestion pipeline is shown in <a href="#lst-record" class="quarto-xref">Listing&nbsp;2</a>. Each SWIM document explodes into one record per flight, which the pipeline fuses by GUFI across many messages over time.</p>
+<div id="lst-swim" class="xml listing quarto-float quarto-figure quarto-figure-left anchored">
+<figure class="quarto-float quarto-float-lst figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-lst" id="lst-swim-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Listing&nbsp;1: Raw SWIM TFMS flight message (abridged).
+</figcaption>
+<div aria-describedby="lst-swim-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode xml code-with-copy"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>&lt;<span class="kw">fdm:fltdMessage</span><span class="ot"> acid=</span><span class="st">"AAL2033"</span><span class="ot"> airline=</span><span class="st">"AAL"</span><span class="ot"> arrArpt=</span><span class="st">"KLGA"</span><span class="ot"> depArpt=</span><span class="st">"KCLT"</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ot">   flightRef=</span><span class="st">"150976233"</span><span class="ot"> msgType=</span><span class="st">"FlightModify"</span> <span class="er">...</span>&gt;</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  &lt;<span class="kw">nxcm:flightStatus</span>&gt;PLANNED&lt;/<span class="kw">nxcm:flightStatus</span>&gt;</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  &lt;<span class="kw">nxcm:aircraftModel</span>&gt;A320&lt;/<span class="kw">nxcm:aircraftModel</span>&gt;</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  &lt;<span class="kw">nxcm:flightTimeData</span><span class="ot"> airlineOutTime=</span><span class="st">"2026-07-04T15:39:00Z"</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="ot">                       airlineInTime=</span><span class="st">"2026-07-04T17:35:00Z"</span>/&gt;</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>&lt;/<span class="kw">fdm:fltdMessage</span>&gt;</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</figure>
+</div>
+<div id="lst-record" class="json listing quarto-float quarto-figure quarto-figure-left anchored">
+<figure class="quarto-float quarto-float-lst figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-lst" id="lst-record-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Listing&nbsp;2: Fused, schema-validated canonical flight-instance record.
+</figcaption>
+<div aria-describedby="lst-record-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span> <span class="dt">"flight_instance_id"</span><span class="fu">:</span> <span class="st">"KN6770564K"</span><span class="fu">,</span> <span class="dt">"callsign"</span><span class="fu">:</span> <span class="st">"AAL2033"</span><span class="fu">,</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"flight_number"</span><span class="fu">:</span> <span class="st">"AA2033"</span><span class="fu">,</span> <span class="dt">"carrier_name"</span><span class="fu">:</span> <span class="st">"American Airlines"</span><span class="fu">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"origin"</span><span class="fu">:</span> <span class="st">"KCLT"</span><span class="fu">,</span> <span class="dt">"destination"</span><span class="fu">:</span> <span class="st">"KLGA"</span><span class="fu">,</span> <span class="dt">"aircraft_type"</span><span class="fu">:</span> <span class="st">"A320"</span><span class="fu">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"scheduled_gate_departure"</span><span class="fu">:</span> <span class="st">"2026-07-04T15:39:00Z"</span><span class="fu">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"estimated_arrival"</span><span class="fu">:</span> <span class="st">"2026-07-04T17:41:00Z"</span><span class="fu">,</span> <span class="dt">"flight_status"</span><span class="fu">:</span> <span class="st">"PLANNED"</span><span class="fu">,</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"resolution_status"</span><span class="fu">:</span> <span class="st">"airline_resolved"</span><span class="fu">,</span> <span class="dt">"schema_version"</span><span class="fu">:</span> <span class="st">"1.0"</span> <span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</figure>
+</div>
+</section>
+<section id="methodology-and-proposed-solution" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> Methodology and Proposed Solution</h1>
+<p><strong>Pipeline.</strong> Ingestion services publish each source to a dedicated Kafka topic (48-hour retention). Apache Spark Structured Streaming consumes these topics and applies the existing <code>aeroflux_parser</code> library to parse, normalize, validate against a strict schema contract, and fuse messages into per-flight records via GUFI-keyed, source-priority mediation, with <code>flight_ref</code> used only as a reconciliation bridge and ADS-B used to resolve the tail. Fused records land in MongoDB (silver, 48-hour TTL) and, together with BTS backfill, in a MinIO data lake (gold parquet). The full architecture is shown in <a href="#fig-arch" class="quarto-xref">Figure&nbsp;1</a>.</p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div id="fig-arch" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+<pre class="mermaid mermaid-js" data-label="fig-arch">flowchart TB
+  subgraph SR[Sources]
+    SWIM[SWIM TFMS]; ADSB[ADS-B]; WX[Weather METAR]; BTS[(BTS historical)]
+  end
+  K[Kafka topics - 48h]
+  subgraph SP[Spark Structured Streaming]
+    P[Parse + Validate + Fuse]; F[Feature Engineering]
+  end
+  subgraph ST[Storage]
+    M[(MongoDB - 48h TTL)]; L[(MinIO gold parquet)]; PG[(Postgres + pgvector)]
+  end
+  subgraph MLc[ML]
+    B[Baseline: Logistic Reg.]; A[Advanced: XGBoost + propagation]; R[MLflow + SHAP]
+  end
+  API[FastAPI Inference API]; AG[Analyst Agent - RAG]; UI[AeroFlux UI]
+  SWIM --&gt; K
+  ADSB --&gt; K
+  WX --&gt; K
+  K --&gt; P --&gt; F
+  F --&gt; M
+  F --&gt; L
+  BTS --&gt; L
+  L --&gt; B
+  L --&gt; A
+  B --&gt; R
+  A --&gt; R
+  R --&gt; API
+  M --&gt; API
+  PG --&gt; AG
+  API --&gt; AG --&gt; UI
+  API --&gt; UI
+</pre>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: AeroFlux Stage 2 architecture. Solid stages are the minimum implementation; storage retention is short by design. An editable draw.io version accompanies this proposal.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p><strong>Baseline versus advanced models.</strong> The baseline is a logistic-regression classifier on flight-level features (carrier, origin, destination, scheduled times). The advanced model is a gradient-boosted tree (XGBoost) enriched with <em>propagation</em> features (previous-leg arrival delay, scheduled turnaround buffer), weather features, and rolling airport demand—directly operationalizing the propagation literature (Beatty et al., 1999; Kafle &amp; Zou, 2016). Both target a 15-minute arrival-delay classification, with class imbalance addressed via resampling, a gap noted in recent reviews (AlBassam &amp; AlShahrani, 2025). Models are tracked in MLflow and explained with SHAP (Lundberg &amp; Lee, 2017), whose outputs feed the agent.</p>
+<p><strong>Evaluation.</strong> Both predictive and system performance are evaluated (<a href="#tbl-models" class="quarto-xref">Table&nbsp;2</a>). Predictive: ROC-AUC, PR-AUC, F1, and Brier score / calibration, using point-in-time features to prevent leakage. System: end-to-end latency, sustained message throughput, fusion completeness (fields populated per flight), and resource footprint.</p>
+<div id="tbl-models" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-models-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: Baseline-versus-advanced comparison and evaluation plan.
+</figcaption>
+<div aria-describedby="tbl-models-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Dimension</th>
+<th>Baseline</th>
+<th>Advanced</th>
+<th>Metrics</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Model</td>
+<td>Logistic Regression</td>
+<td>XGBoost + propagation + weather</td>
+<td>ROC-AUC, PR-AUC, F1, Brier</td>
+</tr>
+<tr class="even">
+<td>Features</td>
+<td>Flight-level</td>
+<td>+ propagation, weather, demand</td>
+<td>Feature importance (SHAP)</td>
+</tr>
+<tr class="odd">
+<td>System</td>
+<td>—</td>
+<td>Streaming pipeline</td>
+<td>Latency, throughput, completeness</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<p><strong>Agentic AI and LLM approach.</strong> The starter <em>Aviation Operations Analyst Agent</em> answers natural-language questions (e.g., “Why is this flight likely delayed?”) by combining retrieval-augmented generation (Lewis et al., 2020) over the aviation-documentation corpus (embeddings in pgvector) with tool calls that query the fused databases, invoke the delay model, and return SHAP explanations. The agent retrieves evidence, explains predictions, and recommends next steps; it does <strong>not</strong> execute operational aviation decisions.</p>
+</section>
+<section id="development-environment" class="level1" data-number="6">
+<h1 data-number="6"><span class="header-section-number">6</span> Development Environment</h1>
+<p>The stack (<a href="#tbl-stack" class="quarto-xref">Table&nbsp;3</a>) is entirely open-source and container-first. Every component runs as a Docker Compose service, so the platform deploys unchanged on a laptop, university hardware, or a single cloud VM; managed AWS services (MSK, EMR, SageMaker) are an optional scale path rather than a requirement. MinIO provides an S3-compatible object store that swaps to real S3 with no code change. Short retention keeps storage and cost minimal (target budget: a modest VM plus a few dollars of LLM API usage).</p>
+<div id="tbl-stack" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-stack-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;3: Development environment and technology stack.
+</figcaption>
+<div aria-describedby="tbl-stack-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Category</th>
+<th>Tools</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Language</td>
+<td>Python 3.11</td>
+</tr>
+<tr class="even">
+<td>Streaming</td>
+<td>Apache Kafka, Spark Structured Streaming</td>
+</tr>
+<tr class="odd">
+<td>Storage</td>
+<td>MongoDB, PostgreSQL + pgvector, MinIO (S3-compatible)</td>
+</tr>
+<tr class="even">
+<td>ML</td>
+<td>scikit-learn, XGBoost (Chen &amp; Guestrin, 2016), MLflow, SHAP</td>
+</tr>
+<tr class="odd">
+<td>LLM / RAG</td>
+<td>Claude API, pgvector, tool-calling agent loop</td>
+</tr>
+<tr class="even">
+<td>Serving / UI</td>
+<td>FastAPI, Dash / Plotly</td>
+</tr>
+<tr class="odd">
+<td>Orchestration</td>
+<td>Prefect</td>
+</tr>
+<tr class="even">
+<td>Packaging / Platform</td>
+<td>Docker + Docker Compose; optional AWS EC2 + S3</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+</section>
+<section id="project-tasks-and-timeline" class="level1" data-number="7">
+<h1 data-number="7"><span class="header-section-number">7</span> Project Tasks and Timeline</h1>
+<p>The minimum implementation is scoped to approximately one month (<a href="#tbl-timeline" class="quarto-xref">Table&nbsp;4</a>), building on Stage 1’s completed ingestion, fusion, entity-resolution, schema contract, and baseline model. Future capabilities—graph analytics, simulation, digital twin, and a multi-agent system—are explicitly out of scope for this timeline.</p>
+<div id="tbl-timeline" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-timeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;4: One-month project timeline and effort allocation.
+</figcaption>
+<div aria-describedby="tbl-timeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Week</th>
+<th>Tasks</th>
+<th>Est. hours</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>Add weather source; Spark Structured Streaming pipeline; MongoDB silver store + TTL</td>
+<td>20</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>Feature engineering (propagation, demand, weather); gold dataset; baseline vs.&nbsp;advanced training; MLflow; evaluation</td>
+<td>22</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>FastAPI inference API + SHAP; pgvector RAG; analyst agent + tools</td>
+<td>22</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>Integration, UI wiring, system + predictive evaluation, demo, write-up; buffer</td>
+<td>18</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+</section>
+<section id="references" class="level1 unnumbered">
+<h1 class="unnumbered">References</h1>
+<p>AlBassam, S. A. A., &amp; AlShahrani, D. N. (2025). Flight delay prediction: Evaluating machine learning algorithms for enhanced accuracy. <em>PLOS ONE, 20</em>(12), e0335141.</p>
+<p>Beatty, R., Hsu, R., Berry, L., &amp; Rome, J. (1999). Preliminary evaluation of flight delay propagation through an airline schedule. <em>Air Traffic Control Quarterly, 7</em>(4), 259–270.</p>
+<p>Belcastro, L., Marozzo, F., Talia, D., &amp; Trunfio, P. (2016). Using scalable data mining for predicting flight delays. <em>ACM Transactions on Intelligent Systems and Technology, 8</em>(1), 1–20.</p>
+<p>Chen, T., &amp; Guestrin, C. (2016). XGBoost: A scalable tree boosting system. In <em>Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining</em> (pp.&nbsp;785–794).</p>
+<p>Kafle, N., &amp; Zou, B. (2016). Modeling flight delay propagation: A new analytical-econometric approach. <em>Transportation Research Part B: Methodological, 93</em>, 520–542.</p>
+<p>Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., … Kiela, D. (2020). Retrieval-augmented generation for knowledge-intensive NLP tasks. In <em>Advances in Neural Information Processing Systems 33</em> (pp. 9459–9474).</p>
+<p>Lundberg, S. M., &amp; Lee, S.-I. (2017). A unified approach to interpreting model predictions. In <em>Advances in Neural Information Processing Systems 30</em> (pp. 4765–4774).</p>
+<p>National Aeronautics and Space Administration. (2021). <em>Airspace Technology Demonstration 2 (ATD-2) Fuser</em> [Computer software]. GitHub. https://github.com/nasa/atd2-fuser</p>
+<p>Schäfer, M., Strohmeier, M., Lenders, V., Martinovic, I., &amp; Wilhelm, M. (2014). Bringing up OpenSky: A large-scale ADS-B sensor network for research. In <em>Proceedings of the 13th International Symposium on Information Processing in Sensor Networks (IPSN)</em> (pp.&nbsp;83–94).</p>
+<p>Sternberg, A., Soares, J., Carvalho, D., &amp; Ogasawara, E. (2017). <em>A review on flight delay prediction</em>. arXiv:1703.06118.</p>
+<p>Wong, J.-T., &amp; Tsai, S.-C. (2012). A survival model for flight delay propagation. <em>Journal of Air Transport Management, 23</em>, 5–11.</p>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/jonathanwilsonami\.github\.io\/aero-flux-stage2-dev\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
