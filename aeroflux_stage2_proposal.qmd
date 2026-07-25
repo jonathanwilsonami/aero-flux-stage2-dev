@@ -1,5 +1,5 @@
 ---
-title: "[TEMPLATE] - AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence"
+title: "AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence"
 subtitle: "Formal Project Proposal"
 author: "Jonathan Wilson"
 date: "2026-07-18"
@@ -26,7 +26,8 @@ format:
 
 bibliography: references.bib
 csl: apa.csl
-cite-method: citeproc
+cite-method: citeproc 
+lightbox: true
 ---
 
 ::: {.callout-note appearance="minimal"}
@@ -50,20 +51,25 @@ and decoupled* big-data platform that ingests, fuses, processes, and analyzes
 aviation and weather data in real time. The primary use case is flight-delay
 prediction; the same architecture is designed to support congestion analysis,
 delay-propagation modeling, operational monitoring, decision support, and
-agentic AI. Stage 1 (complete) established a historical machine-learning
-pipeline and an interactive prototype; Stage 2 adds the live data platform, a
+agentic AI. [Stage 1](https://jonathanwilsonami.github.io/OR568_ML_Project/) established a historical machine-learning pipeline and an interactive prototype [@wilson2026flightdelay]; Stage 2 adds the live data platform, a
 baseline-versus-advanced model comparison, and an explainable analyst agent.
 
 **Technical challenges.** Building this platform requires solving several
-non-trivial problems: (1) ingesting heterogeneous, error-prone streaming sources
-(FAA SWIM XML, ADS-B, weather) without data loss; (2) *entity resolution* across
+non-trivial problems: 
+
+(1) Ingesting heterogeneous, error-prone streaming sources
+(FAA SWIM XML, ADS-B, weather) without data loss; 
+(2) *Entity resolution* across
 systems that share no universal key—for example, the aircraft tail number is not
-published in SWIM flight data and must be recovered from ADS-B; (3) unstable
-identifiers, since a flight's `flight_ref` changes on plan amendment while its
-Globally Unique Flight Identifier (GUFI) remains stable; (4) train-serve skew,
-because historical labels (Bureau of Transportation Statistics) and live
-features are measured differently; and (5) delivering all of this at demo quality
-on a portable, low-cost footprint.
+published in SWIM flight data and must be recovered from ADS-B which itself has limitations 
+due to lack of coverage; 
+(3) Unstable identifiers, since a flight's `flight_ref` changes on plan amendment while its
+Globally Unique Flight Identifier (GUFI) remains stable; 
+(4) Train-serve skew, because historical labels (Bureau of Transportation Statistics) and live
+features are measured differently; and 
+(5) Delivering all of this at demo quality on a portable, low-cost footprint.
+
+Several of these challenges have already been partially addressed through a working end-to-end prototype pipeline. However, the proposed implementation is intended to reduce and manage these limitations rather than eliminate every possible source of missing data, ambiguity, or operational uncertainty.
 
 # Related Work
 
@@ -125,15 +131,15 @@ training labels. Large-scale ADS-B research networks such as OpenSky demonstrate
 the usefulness of distributed aircraft surveillance data for aviation research
 [@schaefer2014opensky].
 
-| Source | Type | Role | Retention |
-|---|---|---|---|
-| FAA SWIM (TFMS) | Streaming XML | Live flight state (primary) | 48 h |
-| ADS-B (airplanes.live / adsb.lol) | Streaming JSON | Airframe / tail resolution | 48 h |
-| NOAA METAR / TAF | Polled | Weather features | 48 h |
-| BTS On-Time Performance | Historical CSV | Training labels | Persistent |
-| Aviation docs (FAA, SWIM dict.) | Documents | RAG corpus | Persistent |
+| Source | Type | Role | Retention | Estimated retained size |
+|---|---|---|---|---|
+| FAA SWIM (TFMS) | Streaming XML | Live flight state (primary) | 48 h | Approximately 5–25 GB |
+| ADS-B (airplanes.live / adsb.lol) | Streaming JSON | Airframe and tail resolution | 48 h | Approximately 2–10 GB |
+| NOAA METAR / TAF | Polled JSON / text | Weather observations and forecasts | 48 h | Approximately 50–250 MB |
+| BTS On-Time Performance | Historical CSV / Parquet | Historical training labels | Persistent | Approximately 20–40 GB as CSV or 4–10 GB as Parquet |
+| Aviation documents (FAA, SWIM dictionaries, and related references) | PDF / HTML / text | RAG documentation corpus | Persistent | Approximately 0.5–2 GB, including extracted text and embeddings |
 
-: Data sources fused by AeroFlux Stage 2. {#tbl-datasets}
+: AeroFlux Stage 2 data sources, retention policies, and estimated storage requirements. Estimated sizes are project-planning ranges rather than published source totals and depend on geographic scope, ingestion frequency, selected fields, compression, and duplicate handling. {#tbl-datasets}
 
 A raw SWIM message (abridged) is shown in @lst-swim; the corresponding fused,
 validated canonical record produced by the ingestion pipeline is shown in
@@ -168,43 +174,9 @@ against a strict schema contract, and fuse messages into per-flight records via
 GUFI-keyed, source-priority mediation, with `flight_ref` used only as a
 reconciliation bridge and ADS-B used to resolve the tail. Fused records land in
 MongoDB (silver, 48-hour TTL) and, together with BTS backfill, in a MinIO
-data lake (gold parquet). The full architecture is shown in @fig-arch.
+data lake (gold parquet). The full architecture is shown in @fig-aeroflux2-arch.
 
-```{mermaid}
-%%| label: fig-arch
-%%| fig-cap: "AeroFlux Stage 2 architecture. Solid stages are the minimum implementation; storage retention is short by design. An editable draw.io version accompanies this proposal."
-flowchart TB
-  subgraph SR[Sources]
-    SWIM[SWIM TFMS]; ADSB[ADS-B]; WX[Weather METAR]; BTS[(BTS historical)]
-  end
-  K[Kafka topics - 48h]
-  subgraph SP[Spark Structured Streaming]
-    P[Parse + Validate + Fuse]; F[Feature Engineering]
-  end
-  subgraph ST[Storage]
-    M[(MongoDB - 48h TTL)]; L[(MinIO gold parquet)]; PG[(Postgres + pgvector)]
-  end
-  subgraph MLc[ML]
-    B[Baseline: Logistic Reg.]; A[Advanced: XGBoost + propagation]; R[MLflow + SHAP]
-  end
-  API[FastAPI Inference API]; AG[Analyst Agent - RAG]; UI[AeroFlux UI]
-  SWIM --> K
-  ADSB --> K
-  WX --> K
-  K --> P --> F
-  F --> M
-  F --> L
-  BTS --> L
-  L --> B
-  L --> A
-  B --> R
-  A --> R
-  R --> API
-  M --> API
-  PG --> AG
-  API --> AG --> UI
-  API --> UI
-```
+![AeroFlux Stage 2 system architecture.](/images/design/aeroflux2-arch.png){#fig-aeroflux2-arch .lightbox}
 
 **Baseline versus advanced models.** The baseline is a logistic-regression
 classifier on flight-level features (carrier, origin, destination, scheduled
