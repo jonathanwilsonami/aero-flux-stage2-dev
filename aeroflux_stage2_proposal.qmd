@@ -3,10 +3,13 @@ title: "[TEMPLATE] - AeroFlux Stage 2: A Scalable, Portable Big-Data Platform fo
 subtitle: "Formal Project Proposal"
 author: "Jonathan Wilson"
 date: "2026-07-18"
+
 format:
   html:
     toc: true
     number-sections: true
+    link-citations: true
+
   pdf:
     documentclass: article
     fontsize: 12pt
@@ -15,11 +18,20 @@ format:
     number-sections: true
     toc: false
     fig-pos: "H"
+    link-citations: true
+
+  docx:
+    toc: true
+    number-sections: true
+
+bibliography: references.bib
+csl: apa.csl
+cite-method: citeproc
 ---
 
 ::: {.callout-note appearance="minimal"}
-**Course:** AIT 614 Sec 001
-**Instructor:** Dr. Duoduo Liao
+**Course:** AIT 614 Sec 001  
+**Instructor:** Dr. Duoduo Liao  
 **Institution:** George Mason University
 :::
 
@@ -56,33 +68,36 @@ on a portable, low-cost footprint.
 # Related Work
 
 **Machine-learning delay prediction.** Most prior work frames delay prediction
-as supervised classification or regression over historical records. Reviews by
-Sternberg et al. (2017) and, more recently, the dissecting review in *IEEE
-Transactions on Intelligent Transportation Systems* (2025) show tree ensembles
-and deep networks dominating, with recent studies emphasizing class-imbalance
-handling (AlBassam & AlShahrani, 2025). Their strength is high accuracy on curated
-historical data; their limitations are that they are retrospective, typically
-single-source, and treat flights as independent observations, ignoring the
-network coupling that drives real disruptions.
+as supervised classification or regression over historical records. The review
+by @sternberg2017review describes the major approaches used for flight-delay
+prediction, while more recent work continues to evaluate machine-learning
+algorithms and class-imbalance handling [@albassam2025flight]. These approaches
+can achieve strong accuracy on curated historical data, but they are often
+retrospective, single-source, and treat flights as independent observations,
+which limits their ability to represent the network coupling that drives
+real-world disruptions.
 
 **Delay-propagation modeling.** A separate literature models how delays ripple
-through schedules: Beatty et al. (1999) introduced propagation trees, Wong and
-Tsai (2012) applied survival models, and Kafle and Zou (2016) proposed an
-analytical-econometric approach. These capture the ripple mechanism but are
-generally offline and disconnected from real-time streaming prediction.
-Belcastro et al. (2016) demonstrated scalable data mining for delay prediction,
-establishing the value of big-data tooling but not real-time fusion.
+through airline schedules. @beatty1999preliminary introduced an early method for
+evaluating delay propagation through an airline schedule, @wong2012survival
+applied a survival model, and @kafle2016propagation proposed an
+analytical-econometric approach. These methods capture important propagation
+mechanisms but are generally offline and disconnected from real-time streaming
+prediction. @belcastro2016flight demonstrated scalable data mining for flight-
+delay prediction, establishing the value of big-data tooling while leaving room
+for tighter integration with real-time data fusion.
 
-**Operational data fusion.** The state of the art in operational systems is
-NASA's Airspace Technology Demonstration 2 (ATD-2) *Fuser* (NASA, 2021), which
-fuses multiple SWIM sources into a single GUFI-keyed flight record. Its strength
-is production-grade fused "truth"; its limitation is a heavyweight, largely
-closed Java stack that is not an open, extensible ML/AI platform.
+**Operational data fusion.** The state of the art in operational systems
+includes NASA's Airspace Technology Demonstration 2 (ATD-2) *Fuser*, which fuses
+multiple aviation data sources into a unified flight record
+[@nasa2021atd2fuser]. Its strength is production-grade fused operational data;
+its limitation for this project is that it is not designed as a lightweight,
+open, extensible ML/AI experimentation platform.
 
 **Relevance of this approach.** AeroFlux Stage 2 bridges these strands. It
 couples lightweight, Fuser-inspired real-time fusion and entity resolution with
-propagation-aware feature engineering *and* an explainable retrieval-augmented
-agent—integrating capabilities that the prior literature treats separately.
+propagation-aware feature engineering and an explainable retrieval-augmented
+agent—integrating capabilities that prior work often treats separately.
 
 # Objectives
 
@@ -100,13 +115,15 @@ agent—integrating capabilities that the prior literature treats separately.
 
 # Datasets
 
-The platform fuses four aviation/weather sources plus a documentation corpus,
+The platform fuses four aviation and weather sources plus a documentation corpus,
 summarized in @tbl-datasets. FAA SWIM provides the authoritative live NAS flight
 state; ADS-B supplies the physical airframe identity (ICAO 24-bit address and
 registration) needed to link an aircraft's successive legs; NOAA METAR/TAF
 supplies weather, a leading delay driver; and the BTS On-Time Performance
 dataset—which includes actual gate times and tail numbers—provides historical
-training labels.
+training labels. Large-scale ADS-B research networks such as OpenSky demonstrate
+the usefulness of distributed aircraft surveillance data for aviation research
+[@schaefer2014opensky].
 
 | Source | Type | Role | Retention |
 |---|---|---|---|
@@ -191,20 +208,21 @@ flowchart TB
 
 **Baseline versus advanced models.** The baseline is a logistic-regression
 classifier on flight-level features (carrier, origin, destination, scheduled
-times). The advanced model is a gradient-boosted tree (XGBoost) enriched with
-*propagation* features (previous-leg arrival delay, scheduled turnaround buffer),
-weather features, and rolling airport demand—directly operationalizing the
-propagation literature (Beatty et al., 1999; Kafle & Zou, 2016). Both target a
-15-minute arrival-delay classification, with class imbalance addressed via
-resampling, a gap noted in recent reviews (AlBassam & AlShahrani, 2025). Models
-are tracked in MLflow and explained with SHAP (Lundberg & Lee, 2017), whose
-outputs feed the agent.
+times). The advanced model is a gradient-boosted tree using XGBoost
+[@chen2016xgboost] and is enriched with *propagation* features (previous-leg
+arrival delay and scheduled turnaround buffer), weather features, and rolling
+airport demand. This design directly operationalizes findings from the delay-
+propagation literature [@beatty1999preliminary; @kafle2016propagation]. Both
+models target a 15-minute arrival-delay classification, with class imbalance
+addressed through resampling, a concern emphasized in recent delay-prediction
+research [@albassam2025flight]. Models are tracked in MLflow and explained with
+SHAP [@lundberg2017shap], whose outputs feed the agent.
 
 **Evaluation.** Both predictive and system performance are evaluated
-(@tbl-models). Predictive: ROC-AUC, PR-AUC, F1, and Brier score / calibration,
-using point-in-time features to prevent leakage. System: end-to-end latency,
-sustained message throughput, fusion completeness (fields populated per flight),
-and resource footprint.
+(@tbl-models). Predictive metrics include ROC-AUC, PR-AUC, F1, and Brier score
+and calibration, using point-in-time features to prevent leakage. System metrics
+include end-to-end latency, sustained message throughput, fusion completeness
+(fields populated per flight), and resource footprint.
 
 | Dimension | Baseline | Advanced | Metrics |
 |---|---|---|---|
@@ -215,8 +233,8 @@ and resource footprint.
 : Baseline-versus-advanced comparison and evaluation plan. {#tbl-models}
 
 **Agentic AI and LLM approach.** The starter *Aviation Operations Analyst Agent*
-answers natural-language questions (e.g., "Why is this flight likely delayed?")
-by combining retrieval-augmented generation (Lewis et al., 2020) over the
+answers natural-language questions (for example, "Why is this flight likely
+delayed?") by combining retrieval-augmented generation [@lewis2020rag] over the
 aviation-documentation corpus (embeddings in pgvector) with tool calls that query
 the fused databases, invoke the delay model, and return SHAP explanations. The
 agent retrieves evidence, explains predictions, and recommends next steps; it
@@ -237,7 +255,7 @@ few dollars of LLM API usage).
 | Language | Python 3.11 |
 | Streaming | Apache Kafka, Spark Structured Streaming |
 | Storage | MongoDB, PostgreSQL + pgvector, MinIO (S3-compatible) |
-| ML | scikit-learn, XGBoost (Chen & Guestrin, 2016), MLflow, SHAP |
+| ML | scikit-learn, XGBoost [@chen2016xgboost], MLflow, SHAP [@lundberg2017shap] |
 | LLM / RAG | Claude API, pgvector, tool-calling agent loop |
 | Serving / UI | FastAPI, Dash / Plotly |
 | Orchestration | Prefect |
@@ -264,46 +282,5 @@ timeline.
 
 # References {.unnumbered}
 
-AlBassam, S. A. A., & AlShahrani, D. N. (2025). Flight delay prediction:
-Evaluating machine learning algorithms for enhanced accuracy. *PLOS ONE, 20*(12),
-e0335141.
-
-Beatty, R., Hsu, R., Berry, L., & Rome, J. (1999). Preliminary evaluation of
-flight delay propagation through an airline schedule. *Air Traffic Control
-Quarterly, 7*(4), 259–270.
-
-Belcastro, L., Marozzo, F., Talia, D., & Trunfio, P. (2016). Using scalable data
-mining for predicting flight delays. *ACM Transactions on Intelligent Systems and
-Technology, 8*(1), 1–20.
-
-Chen, T., & Guestrin, C. (2016). XGBoost: A scalable tree boosting system. In
-*Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge
-Discovery and Data Mining* (pp. 785–794).
-
-Kafle, N., & Zou, B. (2016). Modeling flight delay propagation: A new
-analytical-econometric approach. *Transportation Research Part B: Methodological,
-93*, 520–542.
-
-Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., ...
-Kiela, D. (2020). Retrieval-augmented generation for knowledge-intensive NLP
-tasks. In *Advances in Neural Information Processing Systems 33* (pp.
-9459–9474).
-
-Lundberg, S. M., & Lee, S.-I. (2017). A unified approach to interpreting model
-predictions. In *Advances in Neural Information Processing Systems 30* (pp.
-4765–4774).
-
-National Aeronautics and Space Administration. (2021). *Airspace Technology
-Demonstration 2 (ATD-2) Fuser* [Computer software]. GitHub.
-https://github.com/nasa/atd2-fuser
-
-Schäfer, M., Strohmeier, M., Lenders, V., Martinovic, I., & Wilhelm, M. (2014).
-Bringing up OpenSky: A large-scale ADS-B sensor network for research. In
-*Proceedings of the 13th International Symposium on Information Processing in
-Sensor Networks (IPSN)* (pp. 83–94).
-
-Sternberg, A., Soares, J., Carvalho, D., & Ogasawara, E. (2017). *A review on
-flight delay prediction*. arXiv:1703.06118.
-
-Wong, J.-T., & Tsai, S.-C. (2012). A survival model for flight delay propagation.
-*Journal of Air Transport Management, 23*, 5–11.
+::: {#refs}
+:::
