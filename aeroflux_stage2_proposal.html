@@ -373,7 +373,7 @@ Listing&nbsp;2: Fused, schema-validated canonical flight-instance record.
 </section>
 <section id="methodology-and-proposed-solution" class="level1" data-number="5">
 <h1 data-number="5"><span class="header-section-number">5</span> Methodology and Proposed Solution</h1>
-<p><strong>Pipeline.</strong> Ingestion services publish each source to a dedicated Kafka topic (48-hour retention). Apache Spark Structured Streaming consumes these topics and applies the existing <code>aeroflux_parser</code> library to parse, normalize, validate against a strict schema contract, and fuse messages into per-flight records via GUFI-keyed, source-priority mediation, with <code>flight_ref</code> used only as a reconciliation bridge and ADS-B used to resolve the tail. Fused records land in MongoDB (silver, 48-hour TTL) and, together with BTS backfill, in a MinIO data lake (gold parquet). The full architecture is shown in <a href="#fig-aeroflux2-arch" class="quarto-xref">Figure&nbsp;1</a>.</p>
+<p><strong>Pipeline.</strong> Ingestion services publish each source to a dedicated Kafka topic (48-hour retention). Apache Spark Structured Streaming consumes these topics and applies the existing <code>aeroflux_parser</code> to parse, normalize, validate against a strict schema, and fuse messages into per-flight records via GUFI-keyed, source-priority mediation, with <code>flight_ref</code>. We us this only as a reconciliation bridge and ADS-B used to resolve the tail. Fused records land in MongoDB (silver, 48-hour TTL) and, together with BTS (historical used for training) backfill, in a MinIO data lake (gold parquet). The full architecture is shown in <a href="#fig-aeroflux2-arch" class="quarto-xref">Figure&nbsp;1</a>.</p>
 <div id="fig-aeroflux2-arch" class="lightbox quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-aeroflux2-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -384,7 +384,8 @@ Figure&nbsp;1: AeroFlux Stage 2 system architecture.
 </figcaption>
 </figure>
 </div>
-<p><strong>Baseline versus advanced models.</strong> The baseline is a logistic-regression classifier on flight-level features (carrier, origin, destination, scheduled times). The advanced model is a gradient-boosted tree using XGBoost <span class="citation" data-cites="chen2016xgboost">(<a href="#ref-chen2016xgboost" role="doc-biblioref">Chen &amp; Guestrin, 2016</a>)</span> and is enriched with <em>propagation</em> features (previous-leg arrival delay and scheduled turnaround buffer), weather features, and rolling airport demand. This design directly operationalizes findings from the delay- propagation literature <span class="citation" data-cites="beatty1999preliminary kafle2016propagation">(<a href="#ref-beatty1999preliminary" role="doc-biblioref">Beatty et al., 1999</a>; <a href="#ref-kafle2016propagation" role="doc-biblioref">Kafle &amp; Zou, 2016</a>)</span>. Both models target a 15-minute arrival-delay classification, with class imbalance addressed through resampling, a concern emphasized in recent delay-prediction research <span class="citation" data-cites="albassam2025flight">(<a href="#ref-albassam2025flight" role="doc-biblioref">AlBassam &amp; AlShahrani, 2025</a>)</span>. Models are tracked in MLflow and explained with SHAP <span class="citation" data-cites="lundberg2017shap">(<a href="#ref-lundberg2017shap" role="doc-biblioref">Lundberg &amp; Lee, 2017</a>)</span>, whose outputs feed the agent.</p>
+<p><strong>Modeling.</strong> The main model is a gradient-boosted tree using XGBoost <span class="citation" data-cites="chen2016xgboost">(<a href="#ref-chen2016xgboost" role="doc-biblioref">Chen &amp; Guestrin, 2016</a>)</span> and is enriched with <em>propagation</em> features (previous-leg arrival delay and scheduled turnaround buffer), weather features, and rolling airport demand. This design directly operationalizes findings from the delay- propagation literature <span class="citation" data-cites="beatty1999preliminary kafle2016propagation">(<a href="#ref-beatty1999preliminary" role="doc-biblioref">Beatty et al., 1999</a>; <a href="#ref-kafle2016propagation" role="doc-biblioref">Kafle &amp; Zou, 2016</a>)</span>. The model targets a 15-minute arrival-delay classification, with class imbalance addressed through resampling, a concern emphasized in recent delay-prediction research <span class="citation" data-cites="albassam2025flight">(<a href="#ref-albassam2025flight" role="doc-biblioref">AlBassam &amp; AlShahrani, 2025</a>)</span>. Models are tracked in MLflow and explained with SHAP <span class="citation" data-cites="lundberg2017shap">(<a href="#ref-lundberg2017shap" role="doc-biblioref">Lundberg &amp; Lee, 2017</a>)</span>, whose outputs feed the agent.</p>
+<p>Add possible section on how we could leverage distributed training See: https://www.ischool.berkeley.edu/projects/2025/air-travel-delay-prediction-feature-engineering-and-ml-approaches This would be a bonous as the model is already trained. This project focus on how to use the model during live inference of real time data feeds.</p>
 <p><strong>Evaluation.</strong> Both predictive and system performance are evaluated (<a href="#tbl-models" class="quarto-xref">Table&nbsp;2</a>). Predictive metrics include ROC-AUC, PR-AUC, F1, and Brier score and calibration, using point-in-time features to prevent leakage. System metrics include end-to-end latency, sustained message throughput, fusion completeness (fields populated per flight), and resource footprint.</p>
 <div id="tbl-models" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
@@ -410,7 +411,7 @@ Table&nbsp;2: Baseline-versus-advanced comparison and evaluation plan.
 <tbody>
 <tr class="odd">
 <td>Model</td>
-<td>Logistic Regression</td>
+<td>???</td>
 <td>XGBoost + propagation + weather</td>
 <td>ROC-AUC, PR-AUC, F1, Brier</td>
 </tr>
@@ -431,7 +432,7 @@ Table&nbsp;2: Baseline-versus-advanced comparison and evaluation plan.
 </div>
 </figure>
 </div>
-<p><strong>Agentic AI and LLM approach.</strong> The starter <em>Aviation Operations Analyst Agent</em> answers natural-language questions (for example, “Why is this flight likely delayed?”) by combining retrieval-augmented generation <span class="citation" data-cites="lewis2020rag">(<a href="#ref-lewis2020rag" role="doc-biblioref">Lewis et al., 2020</a>)</span> over the aviation-documentation corpus (embeddings in pgvector) with tool calls that query the fused databases, invoke the delay model, and return SHAP explanations. The agent retrieves evidence, explains predictions, and recommends next steps; it does <strong>not</strong> execute operational aviation decisions.</p>
+<p><strong>(Bonous if we have time) Agentic AI and LLM approach.</strong> The starter <em>Aviation Operations Analyst Agent</em> answers natural-language questions (for example, “Why is this flight likely delayed?”) by combining retrieval-augmented generation <span class="citation" data-cites="lewis2020rag">(<a href="#ref-lewis2020rag" role="doc-biblioref">Lewis et al., 2020</a>)</span> over the aviation-documentation corpus (embeddings in pgvector) with tool calls that query the fused databases, invoke the delay model, and return SHAP explanations. The agent retrieves evidence, explains predictions, and recommends next steps; it does <strong>not</strong> execute operational aviation decisions.</p>
 </section>
 <section id="development-environment" class="level1" data-number="6">
 <h1 data-number="6"><span class="header-section-number">6</span> Development Environment</h1>
@@ -456,7 +457,7 @@ Table&nbsp;3: Development environment and technology stack.
 <tbody>
 <tr class="odd">
 <td>Language</td>
-<td>Python 3.11</td>
+<td>Python &gt;3.11</td>
 </tr>
 <tr class="even">
 <td>Streaming</td>
@@ -468,10 +469,10 @@ Table&nbsp;3: Development environment and technology stack.
 </tr>
 <tr class="even">
 <td>ML</td>
-<td>scikit-learn, XGBoost <span class="citation" data-cites="chen2016xgboost">(<a href="#ref-chen2016xgboost" role="doc-biblioref">Chen &amp; Guestrin, 2016</a>)</span>, MLflow, SHAP <span class="citation" data-cites="lundberg2017shap">(<a href="#ref-lundberg2017shap" role="doc-biblioref">Lundberg &amp; Lee, 2017</a>)</span></td>
+<td>SparkML, scikit-learn, XGBoost <span class="citation" data-cites="chen2016xgboost">(<a href="#ref-chen2016xgboost" role="doc-biblioref">Chen &amp; Guestrin, 2016</a>)</span>, MLflow, SHAP <span class="citation" data-cites="lundberg2017shap">(<a href="#ref-lundberg2017shap" role="doc-biblioref">Lundberg &amp; Lee, 2017</a>)</span></td>
 </tr>
 <tr class="odd">
-<td>LLM / RAG</td>
+<td>(optional) LLM / RAG</td>
 <td>Claude API, pgvector, tool-calling agent loop</td>
 </tr>
 <tr class="even">
@@ -479,12 +480,16 @@ Table&nbsp;3: Development environment and technology stack.
 <td>FastAPI, Dash / Plotly</td>
 </tr>
 <tr class="odd">
-<td>Orchestration</td>
-<td>Prefect</td>
+<td>(Optional) Orchestration</td>
+<td>Prefect or Airflow</td>
 </tr>
 <tr class="even">
-<td>Packaging / Platform</td>
-<td>Docker + Docker Compose; optional AWS EC2 + S3</td>
+<td>Packaging</td>
+<td>Docker + Docker Compose</td>
+</tr>
+<tr class="odd">
+<td>Platform</td>
+<td>Hybrid - On-prem (streaming) and AWS S3, EC2; Optional EMR for scaling</td>
 </tr>
 </tbody>
 </table>
