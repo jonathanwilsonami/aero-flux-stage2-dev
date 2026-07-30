@@ -1,8 +1,35 @@
-notes.txt
-*.env
+# Envs
+*.env*
+
+# Notes
 prompts/
 journal.txt
+notes-todos.txt
+
+# Prototypes 
 *_proto
+
+# Site Page
 /.quarto/
 **/*.quarto_ipynb
-*.bkp
+*.bkp 
+
+# Logs 
+*.log
+
+
+# Data 
+*.csv
+*.tsv
+*.xlsx
+*.json* 
+*.parquet
+
+
+# Python 
+__pycache__/
+*.py[cod]
+*.so
+*.ipynb_checkpoints 
+.pytest_cache/*
+.pytest_cache*

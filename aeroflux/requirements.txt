@@ -1,0 +1,5 @@
+solace-pubsubplus
+confluent-kafka
+psycopg[binary]
+certifi
+python-dotenv
