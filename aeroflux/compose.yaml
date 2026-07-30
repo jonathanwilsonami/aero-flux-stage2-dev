@@ -4,3 +4,35 @@ services:
     container_name: aeroflux-kafka
     ports:
       - "9092:9092"
+
+  postgres:
+    image: postgres:16
+    container_name: aeroflux-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aeroflux}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aeroflux-db}
+      POSTGRES_DB: ${POSTGRES_DB:-aeroflux}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aeroflux}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Optional local S3 for the data lake (uncomment when you want it):
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: aeroflux-minio
+  #   command: server /data --console-address ":9001"
+  #   ports: ["9000:9000", "9001:9001"]
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_USER:-aeroflux}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-aeroflux-minio}
+  #   volumes: ["miniodata:/data"]
+
+volumes:
+  pgdata:
+  # miniodata:

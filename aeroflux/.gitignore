@@ -1,0 +1,30 @@
+# Secrets — ignore real env files but KEEP the template
+*.env*
+!.env.example
+
+# Data — ignore generated data but KEEP the bundled airline crosswalk
+*.csv
+*.tsv
+*.parquet
+*.json*
+!aeroflux_parser/data/airlines.csv
+
+# Logs
+*.log
+
+# Local state / outputs
+out/
+*.db
+dataset.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Site / notes
+/.quarto/
+*.bkp

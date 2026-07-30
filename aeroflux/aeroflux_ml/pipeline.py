@@ -44,7 +44,7 @@ def read_silver_postgres(dsn: str, table: str = "public.flight_instance",
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     finally:
         conn.close()
-    return _ensure_cols(pl.DataFrame(rows))
+    return _ensure_cols(pl.DataFrame(rows, infer_schema_length=None))
 
 
 def read_silver_jsonl(path: str) -> pl.DataFrame:
