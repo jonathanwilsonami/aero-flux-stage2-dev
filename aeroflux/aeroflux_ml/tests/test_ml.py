@@ -1,0 +1,149 @@
+"""Tests for aeroflux_ml. The parity tests are the load-bearing ones."""
+
+import polars as pl
+import pytest
+
+from aeroflux_ml import (
+    from_bts, from_silver, FeatureEngineer, FeatureConfig, ModelConfig,
+    InferenceEngine, InMemoryStateRepository, CANONICAL_COLUMNS,
+)
+
+
+# --- fixtures ---------------------------------------------------------------
+
+def silver_frame():
+    # a live canonical (silver) frame: two legs of the same airframe (hex)
+    return pl.DataFrame({
+        "flight_instance_id": ["L1", "L2"],
+        "hex": ["a1b2c3", "a1b2c3"],
+        "tail_number": [None, None],
+        "carrier_icao": ["AAL", "AAL"],
+        "origin": ["KBOS", "KATL"],
+        "destination": ["KATL", "KMIA"],
+        "scheduled_gate_departure": ["2026-07-04T12:00:00Z", "2026-07-04T15:00:00Z"],
+        "scheduled_gate_arrival": ["2026-07-04T14:30:00Z", "2026-07-04T17:00:00Z"],
+        "actual_off": ["2026-07-04T12:52:00Z", None],   # leg 1 left 52 min late
+        "actual_on": ["2026-07-04T15:19:00Z", None],    # leg 1 arrived 49 min late
+    })
+
+
+def bts_frame():
+    # the SAME two legs in BTS shape (IATA codes, HHMM local times, TAIL_NUM)
+    return pl.DataFrame({
+        "FL_DATE": ["2026-07-04", "2026-07-04"],
+        "OP_UNIQUE_CARRIER": ["AAL", "AAL"],
+        "OP_CARRIER_FL_NUM": [471, 472],
+        "TAIL_NUM": ["N471AA", "N471AA"],
+        "ORIGIN": ["BOS", "ATL"],
+        "DEST": ["ATL", "MIA"],
+        "CRS_DEP_TIME": [1200, 1500],
+        "CRS_ARR_TIME": [1430, 1700],
+        "DEP_TIME": [1252, None],
+        "ARR_TIME": [1519, None],
+    })
+
+
+# --- parity (the point of the whole design) --------------------------------
+
+def test_adapters_produce_the_canonical_schema():
+    for canon in (from_silver(silver_frame()), from_bts(bts_frame())):
+        assert canon.columns == CANONICAL_COLUMNS
+
+
+def test_bts_and_live_yield_identical_feature_columns():
+    cfg = FeatureConfig()  # defaults: flight+rotation+airport_state
+    eng = FeatureEngineer(cfg)
+    live = eng.build_matrix(from_silver(silver_frame()))
+    hist = eng.build_matrix(from_bts(bts_frame()))
+    # IDENTICAL feature column sets -> a BTS-trained model consumes live features
+    assert live.columns == hist.columns
+    assert eng.feature_columns()  # non-empty
+
+
+def test_bts_carrier_airport_normalized_to_icao():
+    canon = from_bts(bts_frame())
+    assert canon["origin"].to_list() == ["KBOS", "KATL"]   # IATA -> ICAO (K+)
+    assert canon["destination"].to_list() == ["KATL", "KMIA"]
+
+
+# --- channel correctness ----------------------------------------------------
+
+def test_rotation_propagates_previous_leg_delay():
+    eng = FeatureEngineer(FeatureConfig())
+    df = eng.build(from_silver(silver_frame()))
+    row2 = df.filter(pl.col("flight_key") == "L2").row(0, named=True)
+    # leg 1 arrived 49 min late -> becomes leg 2's inbound delay
+    assert row2["prev_leg_arr_delay_min"] == 49
+    assert row2["legs_into_day"] == 1
+    assert row2["inbound_resolved"] == 1
+    # leg 1 is first of the day -> no inbound
+    row1 = df.filter(pl.col("flight_key") == "L1").row(0, named=True)
+    assert row1["prev_leg_arr_delay_min"] is None
+
+
+def test_flight_channel_temporal_features():
+    eng = FeatureEngineer(FeatureConfig(channels={"flight": True}))
+    df = eng.build(from_silver(silver_frame()))
+    r = df.filter(pl.col("flight_key") == "L1").row(0, named=True)
+    assert r["sched_dep_hour"] == 12
+    assert r["sched_block_min"] == 150   # 12:00 -> 14:30
+
+
+def test_config_toggles_channels():
+    eng = FeatureEngineer(FeatureConfig(channels={"flight": True, "rotation": False,
+                                                  "airport_state": False}))
+    assert "prev_leg_arr_delay_min" not in eng.feature_columns()
+    assert "sched_dep_hour" in eng.feature_columns()
+
+
+# --- inference + versioning -------------------------------------------------
+
+def _train_tiny_model(tmp_path, feature_cols):
+    import numpy as np, xgboost as xgb
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(200, len(feature_cols)))
+    y = (X[:, 0] + rng.normal(scale=0.3, size=200) > 0).astype(int)
+    d = xgb.DMatrix(X, label=y, feature_names=feature_cols)
+    booster = xgb.train({"objective": "binary:logistic", "max_depth": 3}, d, 10)
+    path = str(tmp_path / "m.json")
+    booster.save_model(path)
+    return path
+
+
+def test_inference_scores_and_versions(tmp_path):
+    eng = FeatureEngineer(FeatureConfig())
+    feats = eng.build_matrix(from_bts(bts_frame()))
+    fcols = eng.feature_columns()
+    model_path = _train_tiny_model(tmp_path, fcols)
+
+    engine = InferenceEngine(ModelConfig(path=model_path, version="v1"), feature_version="1.0")
+    preds = engine.predict(feats)
+
+    assert set(["flight_key", "delay_probability", "predicted_delayed",
+                "model_version", "feature_version", "prediction_key"]).issubset(preds.columns)
+    assert preds["delay_probability"].min() >= 0.0 and preds["delay_probability"].max() <= 1.0
+    # deterministic dedup key
+    k = preds["prediction_key"].to_list()[0]
+    assert k.endswith(":1.0:v1")
+
+
+def test_inference_tolerates_missing_channel(tmp_path):
+    # train on flight+rotation+airport_state; serve a frame missing weather cols
+    eng = FeatureEngineer(FeatureConfig())
+    fcols = eng.feature_columns() + ["origin_wx_wind_kt"]  # model expects a wx col
+    model_path = _train_tiny_model(tmp_path, fcols)
+    engine = InferenceEngine(ModelConfig(path=model_path, version="v1"))
+    feats = eng.build_matrix(from_silver(silver_frame()))   # has no weather col
+    preds = engine.predict(feats)   # must not raise; missing feature -> NaN
+    assert len(preds) == 2
+
+
+# --- state repository dedup -------------------------------------------------
+
+def test_prediction_upsert_is_idempotent():
+    repo = InMemoryStateRepository()
+    p = {"prediction_key": "L1:1.0:v1", "flight_key": "L1", "delay_probability": 0.7}
+    repo.upsert_prediction(p)
+    repo.upsert_prediction({**p, "delay_probability": 0.8})  # same key, rescored
+    assert len(repo.predictions) == 1                         # no duplicate
+    assert repo.predictions["L1:1.0:v1"]["delay_probability"] == 0.8

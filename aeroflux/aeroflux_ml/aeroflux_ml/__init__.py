@@ -1,0 +1,28 @@
+"""AeroFlux ML — modular, config-driven feature engineering + inference.
+
+Train/serve parity by construction: BTS and live both map into one canonical
+frame (schema), features are computed once (channels/engineer), and the model
+consumes only features (inference).
+"""
+
+from .config import Config, FeatureConfig, ModelConfig, load_config
+from .schema import (
+    from_bts, from_silver, add_base_delays, CANONICAL_COLUMNS,
+)
+from .channels import CHANNELS, CHANNEL_OUTPUTS, channel
+from .engineer import FeatureEngineer
+from .inference import InferenceEngine
+from .io import (
+    write_table, StateRepository, InMemoryStateRepository, SqliteStateRepository,
+)
+
+__version__ = "0.1.0"
+
+__all__ = [
+    "Config", "FeatureConfig", "ModelConfig", "load_config",
+    "from_bts", "from_silver", "add_base_delays", "CANONICAL_COLUMNS",
+    "CHANNELS", "CHANNEL_OUTPUTS", "channel",
+    "FeatureEngineer", "InferenceEngine",
+    "write_table", "StateRepository", "InMemoryStateRepository",
+    "SqliteStateRepository",
+]
