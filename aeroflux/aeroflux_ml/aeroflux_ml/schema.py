@@ -52,12 +52,16 @@ def _default_airport_to_icao(code: Optional[str]) -> Optional[str]:
     return code
 
 
-def _coerce_dt(col: str) -> pl.Expr:
-    """Parse ISO-8601 (with trailing Z) into a naive-UTC Datetime, tolerant."""
-    return (
-        pl.col(col).cast(pl.Utf8).str.replace("Z", "", literal=True)
-        .str.to_datetime(strict=False, time_unit="us")
-    )
+def _to_datetime(df: pl.DataFrame, col: str) -> pl.Expr:
+    """Coerce a column to naive-UTC Datetime, whether it arrives as an ISO
+    string (JSONL/CSV) or an already-typed datetime (Postgres timestamptz)."""
+    dt = df.schema.get(col)
+    if dt == pl.Utf8:
+        return (pl.col(col).str.replace("Z", "", literal=True)
+                .str.to_datetime(strict=False, time_unit="us"))
+    if isinstance(dt, pl.Datetime):
+        return pl.col(col).dt.replace_time_zone(None).cast(pl.Datetime("us"))
+    return pl.col(col).cast(pl.Datetime("us"), strict=False)  # Null/other
 
 
 def from_silver(
@@ -76,10 +80,10 @@ def from_silver(
         pl.col("carrier_icao").alias("carrier"),
         pl.col("origin"),
         pl.col("destination"),
-        _coerce_dt("scheduled_gate_departure").alias("sched_dep"),
-        _coerce_dt("scheduled_gate_arrival").alias("sched_arr"),
-        _coerce_dt("actual_off").alias("actual_dep"),   # runway proxy (documented)
-        _coerce_dt("actual_on").alias("actual_arr"),
+        _to_datetime(df, "scheduled_gate_departure").alias("sched_dep"),
+        _to_datetime(df, "scheduled_gate_arrival").alias("sched_arr"),
+        _to_datetime(df, "actual_off").alias("actual_dep"),   # runway proxy (documented)
+        _to_datetime(df, "actual_on").alias("actual_arr"),
     )
 
 

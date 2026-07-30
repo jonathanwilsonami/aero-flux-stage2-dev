@@ -20,6 +20,27 @@ requires rewriting the pipeline.
   calls the tested core per micro-batch.
 - `infra/docker-compose.yml` — Kafka + Spark + Postgres + MinIO local stack.
 
+## Run the whole pipeline (one command)
+
+Reads your streamed silver data, builds the gold table (the model's input), and
+writes it where you can inspect it — no Spark/cloud needed.
+
+```bash
+# from your live Postgres flight_instance table:
+python -m aeroflux_ml.run postgres --dsn "$DSN" --table public.flight_instance --out ./out
+
+# or from a dataset.jsonl the parser produced:
+python -m aeroflux_ml.run jsonl --in dataset.jsonl --out ./out
+
+# add --model models/xgb.json to also score, --state-db state.db to store predictions
+```
+
+Outputs land in `./out`: `gold_features.parquet` + `.csv` (for analysis /
+training), and `predictions.*` if a model is given. The run prints a coverage
+bar per feature so you can see what's populated.
+
+Installed as a console script too: `aeroflux-ml postgres --dsn ...`.
+
 ## The parity guarantee (the important part)
 
 Both sources map into ONE canonical frame; features are computed once on it.

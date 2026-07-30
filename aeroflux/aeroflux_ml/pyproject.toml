@@ -16,3 +16,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["aeroflux_ml"]
+
+[project.scripts]
+aeroflux-ml = "aeroflux_ml.run:main"
