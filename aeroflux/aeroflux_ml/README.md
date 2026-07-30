@@ -100,3 +100,39 @@ docker compose -f infra/docker-compose.yml up -d      # Kafka, Spark, Postgres, 
 4. Swap the local state repo for DynamoDB/MongoDB; lake to S3 + Iceberg.
 5. Add a categorical-encoding step for carrier/origin/destination if the model
    needs them as features (currently numeric channels only).
+
+## Weather (METAR)
+
+The `weather` channel does a temporal + geographic as-of join: for each flight,
+the most recent station observation at or before `sched_dep` (origin) and
+`sched_arr` (destination), matched by airport, within a staleness tolerance (no
+future leakage). It keys on airport + time, so it populates on BOTH BTS and
+live — unlike rotation.
+
+```bash
+# fetch live METAR for the airports in your data and enable the channel:
+python -m aeroflux_ml.run postgres --dsn "$DSN" --table public.flight_instance --weather live
+```
+
+Sources (both free, no key): live = Aviation Weather Center; historical (for
+BTS-aligned training) = Iowa Environmental Mesonet ASOS archive
+(`fetch_metar_history`). Both emit the same obs schema, so weather features
+match across train/serve.
+
+## Orchestration & portable setup
+
+One-time setup on any machine or cloud VM (needs Docker + Python):
+
+```bash
+./bootstrap.sh          # installs deps, brings up infra, creates topic + tables
+```
+
+Then day-to-day with the Makefile (override any var):
+
+```bash
+make ingest DURATION=86400     # collect a full day (background)
+make consume                   # start Kafka->Postgres consumer
+make all                       # raw -> silver -> load -> gold  (one command)
+make weather                   # gold WITH live weather features
+make status                    # health of infra + processes + row counts
+```

@@ -9,9 +9,10 @@ from .config import Config, FeatureConfig, ModelConfig, load_config
 from .schema import (
     from_bts, from_silver, add_base_delays, CANONICAL_COLUMNS,
 )
-from .channels import CHANNELS, CHANNEL_OUTPUTS, channel
+from .channels import CHANNELS, CHANNEL_OUTPUTS, channel, WEATHER_OBS_COLUMNS
 from .engineer import FeatureEngineer
 from .inference import InferenceEngine
+from .weather import fetch_metar_live, fetch_metar_history
 from .io import (
     write_table, StateRepository, InMemoryStateRepository, SqliteStateRepository,
 )
@@ -21,8 +22,9 @@ __version__ = "0.1.0"
 __all__ = [
     "Config", "FeatureConfig", "ModelConfig", "load_config",
     "from_bts", "from_silver", "add_base_delays", "CANONICAL_COLUMNS",
-    "CHANNELS", "CHANNEL_OUTPUTS", "channel",
+    "CHANNELS", "CHANNEL_OUTPUTS", "channel", "WEATHER_OBS_COLUMNS",
     "FeatureEngineer", "InferenceEngine",
+    "fetch_metar_live", "fetch_metar_history",
     "write_table", "StateRepository", "InMemoryStateRepository",
     "SqliteStateRepository",
 ]

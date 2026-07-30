@@ -121,21 +121,57 @@ def flow_features(df: pl.DataFrame, cfg: dict) -> pl.DataFrame:
     )
 
 
-# --- Channel 5: weather (SEAM — needs METAR source + as-of join) ------------
+# --- Channel 5: weather (METAR as-of join) ----------------------------------
+
+# Common METAR observation schema the fetchers produce and this channel joins.
+WEATHER_OBS_COLUMNS = ["station", "obs_time", "wind_kt", "vis_mi", "ifr"]
+
+
+def _asof_weather(df: pl.DataFrame, obs: pl.DataFrame, time_col: str,
+                  airport_col: str, prefix: str, tolerance: str) -> pl.DataFrame:
+    """Attach the most-recent station observation at or before `time_col`,
+    matched by airport. Rows with a null time are excluded and rejoin null."""
+    renamed = obs.select(
+        pl.col("station"),
+        pl.col("obs_time"),
+        pl.col("wind_kt").alias(f"{prefix}_wx_wind_kt"),
+        pl.col("vis_mi").alias(f"{prefix}_wx_vis_mi"),
+        pl.col("ifr").alias(f"{prefix}_wx_ifr"),
+    ).sort("obs_time")
+
+    df = df.with_row_index("_wx_row")
+    valid = df.filter(pl.col(time_col).is_not_null()).sort(time_col)
+    joined = valid.join_asof(
+        renamed, left_on=time_col, right_on="obs_time",
+        by_left=airport_col, by_right="station",
+        strategy="backward", tolerance=tolerance,
+    ).select("_wx_row", f"{prefix}_wx_wind_kt", f"{prefix}_wx_vis_mi", f"{prefix}_wx_ifr")
+
+    return df.join(joined, on="_wx_row", how="left").drop("_wx_row")
+
+
+_WX_COLS = ["origin_wx_wind_kt", "origin_wx_vis_mi", "origin_wx_ifr",
+           "dest_wx_wind_kt", "dest_wx_vis_mi", "dest_wx_ifr"]
+
 
 @channel("weather")
 def weather_features(df: pl.DataFrame, cfg: dict) -> pl.DataFrame:
-    """Placeholder for origin/destination METAR features. Real implementation
-    is a temporal+geographic as-of join to the nearest station observation at
-    or before sched_dep/sched_arr (the pattern proven in the prior project)."""
-    return df.with_columns(
-        pl.lit(None, dtype=pl.Float64).alias("origin_wx_wind_kt"),
-        pl.lit(None, dtype=pl.Float64).alias("origin_wx_vis_mi"),
-        pl.lit(None, dtype=pl.Int8).alias("origin_wx_ifr"),
-        pl.lit(None, dtype=pl.Float64).alias("dest_wx_wind_kt"),
-        pl.lit(None, dtype=pl.Float64).alias("dest_wx_vis_mi"),
-        pl.lit(None, dtype=pl.Int8).alias("dest_wx_ifr"),
-    )
+    """Origin/destination METAR features via temporal+geographic as-of join.
+
+    Needs `cfg['weather_obs']`: a frame of observations (WEATHER_OBS_COLUMNS).
+    Without it, emits null columns so the model's feature schema stays stable
+    whether or not weather is wired in — same trick as the other channels."""
+    obs = cfg.get("weather_obs")
+    if obs is None or (hasattr(obs, "height") and obs.height == 0):
+        return df.with_columns([pl.lit(None, dtype=pl.Float64).alias(c)
+                                if not c.endswith("_ifr")
+                                else pl.lit(None, dtype=pl.Int8).alias(c)
+                                for c in _WX_COLS])
+
+    tol = f"{int(cfg.get('weather_tolerance_minutes', 120))}m"
+    df = _asof_weather(df, obs, "sched_dep", "origin", "origin", tol)
+    df = _asof_weather(df, obs, "sched_arr", "destination", "dest", tol)
+    return df
 
 
 # Feature columns each channel contributes (for the engineer's manifest).
