@@ -45,25 +45,24 @@ def flight_features(df: pl.DataFrame, cfg: dict) -> pl.DataFrame:
 @channel("rotation")
 def rotation_features(df: pl.DataFrame, cfg: dict) -> pl.DataFrame:
     """Previous-leg delay + turnaround, keyed on airframe_key (tail or hex).
-    Rows with no resolved airframe get null features + inbound_resolved=0."""
+
+    Rows with NO resolved airframe (null key) must not be chained — Polars would
+    otherwise lump every null-key row into one bogus 'rotation'. So all rotation
+    features are null for those rows, with inbound_resolved=0. First leg of a
+    real airframe also has no inbound."""
     df = df.sort(["airframe_key", "sched_dep"])
     over = pl.col("airframe_key")
+    has_af = pl.col("airframe_key").is_not_null()
+    leg_idx = pl.int_range(pl.len()).over(over)
     prev_arr_delay = pl.col("arr_delay_min").shift(1).over(over)
-    prev_sched_arr = pl.col("sched_arr").shift(1).over(over)
-    turnaround = (pl.col("sched_dep") - prev_sched_arr).dt.total_minutes()
+    turnaround = (pl.col("sched_dep") - pl.col("sched_arr").shift(1).over(over)).dt.total_minutes()
 
-    df = df.with_columns(
-        prev_arr_delay.alias("prev_leg_arr_delay_min"),
-        turnaround.alias("turnaround_buffer_min"),
-        pl.int_range(pl.len()).over(over).alias("legs_into_day"),  # 0-based leg index
-        pl.col("airframe_key").is_not_null().cast(pl.Int8).alias("inbound_resolved"),
-    )
-    # a flight cannot inherit from a "previous" leg if it is the first of the day
+    inbound = has_af & (leg_idx > 0)
     return df.with_columns(
-        pl.when(pl.col("legs_into_day") == 0)
-        .then(None)
-        .otherwise(pl.col("prev_leg_arr_delay_min"))
-        .alias("prev_leg_arr_delay_min"),
+        pl.when(inbound).then(prev_arr_delay).alias("prev_leg_arr_delay_min"),
+        pl.when(inbound).then(turnaround).alias("turnaround_buffer_min"),
+        pl.when(has_af).then(leg_idx).alias("legs_into_day"),
+        has_af.cast(pl.Int8).alias("inbound_resolved"),
     )
 
 
@@ -72,36 +71,40 @@ def rotation_features(df: pl.DataFrame, cfg: dict) -> pl.DataFrame:
 @channel("airport_state")
 def airport_state_features(df: pl.DataFrame, cfg: dict) -> pl.DataFrame:
     """Rolling demand + recent delay momentum at origin and destination, over a
-    trailing time window. No airframe key needed -> always available."""
+    trailing time window. No airframe key needed -> always available.
+
+    Robust to real data: rows whose time index is null (a flight with no
+    scheduled time yet) are excluded from the rolling window and rejoin with
+    null features, rather than filling a fake timestamp."""
     window = f"{int(cfg.get('window_minutes', 60))}m"
+    df = df.with_row_index("_row")
 
-    # Origin departure state: count + mean recent departure delay per origin.
-    o = (
-        df.sort("sched_dep")
-        .rolling(index_column="sched_dep", period=window, group_by="origin")
-        .agg(
-            pl.len().alias("origin_dep_demand"),
-            pl.col("dep_delay_min").mean().alias("origin_recent_dep_delay"),
+    def _rolling(frame: pl.DataFrame, time_col: str, key_col: str,
+                 delay_col: str, count_name: str, delay_name: str) -> pl.DataFrame:
+        valid = frame.filter(pl.col(time_col).is_not_null()).sort([key_col, time_col])
+        if valid.height == 0:
+            return frame.select("_row").with_columns(
+                pl.lit(None, dtype=pl.UInt32).alias(count_name),
+                pl.lit(None, dtype=pl.Float64).alias(delay_name),
+            )
+        rolled = valid.rolling(index_column=time_col, period=window, group_by=key_col).agg(
+            pl.len().alias(count_name),
+            pl.col(delay_col).mean().alias(delay_name),
         )
-    )
-    # rolling() returns one row per input row (aligned); attach back by position.
-    df = df.sort(["origin", "sched_dep"]).with_columns(
-        o.sort(["origin", "sched_dep"]).select("origin_dep_demand", "origin_recent_dep_delay")
-    )
+        # valid is [key,time]-sorted == rolling's output order -> align positionally
+        out = valid.select("_row").with_columns(
+            rolled.select(count_name, delay_name)
+        )
+        return frame.select("_row").join(out, on="_row", how="left")
 
-    # Destination arrival state.
-    d = (
-        df.sort("sched_arr")
-        .rolling(index_column="sched_arr", period=window, group_by="destination")
-        .agg(
-            pl.len().alias("dest_arr_demand"),
-            pl.col("arr_delay_min").mean().alias("dest_recent_arr_delay"),
-        )
-    )
-    df = df.sort(["destination", "sched_arr"]).with_columns(
-        d.sort(["destination", "sched_arr"]).select("dest_arr_demand", "dest_recent_arr_delay")
-    )
-    return df
+    o = _rolling(df, "sched_dep", "origin", "dep_delay_min",
+                 "origin_dep_demand", "origin_recent_dep_delay")
+    d = _rolling(df, "sched_arr", "destination", "arr_delay_min",
+                 "dest_arr_demand", "dest_recent_arr_delay")
+
+    return (df.join(o, on="_row", how="left")
+              .join(d, on="_row", how="left")
+              .drop("_row"))
 
 
 # --- Channel 4: flow / airspace constraints (SEAM — needs SWIM extraction) --

@@ -147,3 +147,34 @@ def test_prediction_upsert_is_idempotent():
     repo.upsert_prediction({**p, "delay_probability": 0.8})  # same key, rescored
     assert len(repo.predictions) == 1                         # no duplicate
     assert repo.predictions["L1:1.0:v1"]["delay_probability"] == 0.8
+
+
+def test_rotation_nulls_out_unresolved_airframes():
+    # all airframe keys null (e.g. live data with no ADS-B hex) must NOT form a
+    # fake rotation -- every rotation feature null, inbound_resolved 0
+    frame = silver_frame().with_columns(pl.lit(None).alias("hex"))
+    eng = FeatureEngineer(FeatureConfig())
+    df = eng.build(from_silver(frame, airframe_key="hex"))
+    assert df["inbound_resolved"].sum() == 0
+    assert df["prev_leg_arr_delay_min"].null_count() == len(df)
+    assert df["turnaround_buffer_min"].null_count() == len(df)   # no garbage turnaround
+
+
+def test_airport_state_handles_null_times_and_counts_correctly():
+    # mix: two KATL departures 20 min apart (should see demand build), plus a
+    # row with a NULL scheduled time (must not crash the rolling window)
+    frame = pl.DataFrame({
+        "flight_instance_id": ["A", "B", "C"],
+        "hex": [None, None, None], "tail_number": [None, None, None],
+        "carrier_icao": ["DAL", "DAL", "DAL"],
+        "origin": ["KATL", "KATL", "KATL"], "destination": ["KMCO", "KMCO", "KMCO"],
+        "scheduled_gate_departure": ["2026-07-04T12:00:00Z", "2026-07-04T12:20:00Z", None],
+        "scheduled_gate_arrival": ["2026-07-04T14:00:00Z", "2026-07-04T14:20:00Z", None],
+        "actual_off": [None, None, None], "actual_on": [None, None, None],
+    })
+    eng = FeatureEngineer(FeatureConfig(channels={"airport_state": True}, window_minutes=60))
+    df = eng.build(from_silver(frame, airframe_key="hex"))
+    by = {r["flight_key"]: r for r in df.to_dicts()}
+    assert by["A"]["origin_dep_demand"] == 1          # first in window
+    assert by["B"]["origin_dep_demand"] == 2          # A + B within 60 min
+    assert by["C"]["origin_dep_demand"] is None       # null time -> excluded, null feature
