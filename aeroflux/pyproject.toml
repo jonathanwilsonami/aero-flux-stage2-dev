@@ -1,0 +1,57 @@
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "aeroflux"
+version = "0.1.0"
+description = "AeroFlux package"
+authors = ["AeroFlux Team <team@example.com>"]
+readme = "README.md"
+
+packages = [
+  { include = "aeroflux_ml" },
+  { include = "aeroflux_parser" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+certifi = "*"
+confluent-kafka = "*"
+fastparquet = "*"
+lightgbm = "*"
+matplotlib = "*"
+networkx = "*"
+numpy = ">=1.24"
+pandas = ">=2.0"
+polars = ">=1.0"
+psycopg = { version = "*", extras = ["binary"] }
+pyarrow = ">=14"
+python-dotenv = "*"
+scikit-learn = "*"
+scipy = "*"
+seaborn = "*"
+solace-pubsubplus = "*"
+statsmodels = "*"
+pyyaml = ">=6"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7"
+ipykernel = "*"
+jupyterlab = "*"
+jupytext = "*"
+nb_conda_kernels = "*"
+
+[tool.poetry.group.ml.dependencies]
+xgboost = ">=2.0"
+tensorflow = "*"
+
+[tool.poetry.group.parser.dependencies]
+pydantic = ">=2"
+
+[tool.poetry.scripts]
+# Add console scripts here later if you want entry points such as:
+# aeroflux = "aeroflux.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "aeroflux_ml/tests", "aeroflux_parser/tests"]

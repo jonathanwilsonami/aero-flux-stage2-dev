@@ -40,23 +40,38 @@ The following setup assumes you already have your IDE of choice installed (RStud
 
 If you need a different version of Python we can update the dependencies in the environment.yml. file. See the section on working with conda.
 
-### Environment Setup (Conda + Python)
+### Downloading and Installing the Project
+To get started, download the repository and install the aeroflux package in editable mode so your environment picks up changes automatically:
 
-This project uses **Conda** to manage a unified environment for **Python** dependencies. Follow the steps below to get started.
+```bash
+git clone <REPO_URL>
+cd <REPO_FOLDER>
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+If you prefer Poetry, you can use:
+
+```bash
+pip install poetry
+poetry install
+```
+
+Note: the AeroFlux package is built and managed with Poetry, so this is the preferred workflow for local development and dependency management.
+
+### Environment Setup (Optional: Conda)
+
+Conda is optional. If you already use it, you can still create a shared environment with the provided `environment.yml` file. Otherwise, the editable package install workflow above is the recommended path.
 
 ---
 
-#### 1. Install Conda
+#### Optional Conda Setup
 
-If you do not already have Conda installed, install the following:
+If you want to use Conda, install it first:
 
-- Miniconda: https://docs.conda.io/en/latest/miniconda.html  
+- Miniconda: https://docs.conda.io/en/latest/miniconda.html
 
----
-
-#### 2. Create the Environment
-
-Create the environment using the provided `environment.yml` file:
+Then create and activate the environment:
 
 ```bash
 conda env create -f environment.yml

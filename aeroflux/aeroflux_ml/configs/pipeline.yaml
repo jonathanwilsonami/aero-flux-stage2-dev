@@ -1,0 +1,20 @@
+# AeroFlux ML pipeline config. Edit this to add/change features or swap models
+# WITHOUT touching pipeline code.
+
+features:
+  feature_version: "1.0"
+  window_minutes: 60          # trailing window for airport demand / delay momentum
+  airframe_key: hex           # live: 'hex' (ADS-B). BTS adapter uses TAIL_NUM.
+  channels:
+    flight: true              # channel 0 — schedule/route (ready)
+    rotation: true            # channel 1 — two-hop propagation, nullable (ready)
+    airport_state: true       # channels 2-3 — origin/dest demand + delay (ready)
+    flow: false               # channel 4 — EDCT/TMI (needs parser extraction)
+    weather: false            # channel 5 — METAR as-of join (needs source)
+
+model:
+  path: models/xgb_arr_del15.json
+  kind: xgboost
+  version: "bts-2026.07"
+  target: arr_del15
+  features: []                # empty -> read expected features from the model
