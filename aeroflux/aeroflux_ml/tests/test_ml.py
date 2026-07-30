@@ -178,3 +178,59 @@ def test_airport_state_handles_null_times_and_counts_correctly():
     assert by["A"]["origin_dep_demand"] == 1          # first in window
     assert by["B"]["origin_dep_demand"] == 2          # A + B within 60 min
     assert by["C"]["origin_dep_demand"] is None       # null time -> excluded, null feature
+
+
+# --- weather channel: temporal + geographic as-of join ---------------------
+
+from aeroflux_ml import WEATHER_OBS_COLUMNS
+
+def _obs():
+    # KATL obs at 11:00 and 11:45; KMIA at 11:30 (stale) and 13:00 (fresh)
+    return pl.DataFrame({
+        "station":  ["KATL", "KATL", "KMIA", "KMIA"],
+        "obs_time": ["2026-07-04T11:00:00", "2026-07-04T11:45:00",
+                     "2026-07-04T11:30:00", "2026-07-04T13:00:00"],
+        "wind_kt":  [8.0, 15.0, 5.0, 12.0],
+        "vis_mi":   [10.0, 2.0, 10.0, 9.0],
+        "ifr":      [0, 1, 0, 0],
+    }).with_columns(pl.col("obs_time").str.to_datetime())
+
+def _wx_flights():
+    return pl.DataFrame({
+        "flight_instance_id": ["W1", "W2"],
+        "hex": [None, None], "tail_number": [None, None],
+        "carrier_icao": ["DAL", "DAL"],
+        "origin": ["KATL", "KATL"], "destination": ["KMIA", "KMIA"],
+        # W1 departs 11:50 (matches 11:45 KATL obs); W2 at 10:30 (before any obs)
+        "scheduled_gate_departure": ["2026-07-04T11:50:00Z", "2026-07-04T10:30:00Z"],
+        "scheduled_gate_arrival":  ["2026-07-04T13:40:00Z", "2026-07-04T12:20:00Z"],
+        "actual_off": [None, None], "actual_on": [None, None],
+    })
+
+
+def test_weather_asof_matches_latest_prior_observation():
+    eng = FeatureEngineer(FeatureConfig(channels={"weather": True}))
+    df = eng.build(from_silver(_wx_flights(), airframe_key="hex"),
+                   context={"weather_obs": _obs()})
+    by = {r["flight_key"]: r for r in df.to_dicts()}
+    # W1 @ 11:50 -> latest prior KATL obs is 11:45 (wind 15, IFR)
+    assert by["W1"]["origin_wx_wind_kt"] == 15.0
+    assert by["W1"]["origin_wx_ifr"] == 1
+    # W1 arrives 13:40 -> latest prior KMIA obs is 13:00 (wind 12), within tolerance
+    assert by["W1"]["dest_wx_wind_kt"] == 12.0
+    # W2 departs before any KATL obs -> null (no leakage from future obs)
+    assert by["W2"]["origin_wx_wind_kt"] is None
+
+
+def test_weather_null_without_obs_keeps_schema_stable():
+    eng = FeatureEngineer(FeatureConfig(channels={"weather": True}))
+    df = eng.build(from_silver(_wx_flights(), airframe_key="hex"))  # no obs supplied
+    assert "origin_wx_wind_kt" in df.columns
+    assert df["origin_wx_wind_kt"].null_count() == len(df)
+
+
+def test_weather_channel_column_manifest():
+    from aeroflux_ml import CHANNEL_OUTPUTS
+    assert set(CHANNEL_OUTPUTS["weather"]) == {
+        "origin_wx_wind_kt", "origin_wx_vis_mi", "origin_wx_ifr",
+        "dest_wx_wind_kt", "dest_wx_vis_mi", "dest_wx_ifr"}

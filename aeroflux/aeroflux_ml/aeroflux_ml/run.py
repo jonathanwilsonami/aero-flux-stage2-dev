@@ -54,6 +54,8 @@ def main() -> int:
         p.add_argument("--out", default="./out")
         p.add_argument("--model", default=None, help="optional trained model to score with")
         p.add_argument("--state-db", default=None, help="optional sqlite path for predictions")
+        p.add_argument("--weather", choices=["live", "off"], default="off",
+                       help="fetch live METAR for airports in the data and enable the weather channel")
         p.add_argument("--show", type=int, default=3, help="sample gold rows to print")
 
     args = ap.parse_args()
@@ -67,8 +69,19 @@ def main() -> int:
     if len(silver) == 0:
         sys.exit("No silver rows read from the source.")
 
+    context = None
+    if args.weather == "live":
+        from aeroflux_ml import fetch_metar_live
+        stations = sorted({s for s in
+                           silver["origin"].drop_nulls().to_list()
+                           + silver["destination"].drop_nulls().to_list()})
+        print(f"Fetching live METAR for {len(stations)} airport(s)...")
+        obs = fetch_metar_live(stations)
+        cfg.features.channels["weather"] = True
+        context = {"weather_obs": obs}
+
     summary = pipeline.run(cfg, silver, args.out, model_path=args.model,
-                           state_db=args.state_db)
+                           state_db=args.state_db, context=context)
     _print_summary(summary)
 
     if args.show:

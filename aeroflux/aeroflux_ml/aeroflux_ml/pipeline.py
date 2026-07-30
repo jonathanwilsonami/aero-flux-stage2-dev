@@ -72,13 +72,14 @@ def _coverage(df: pl.DataFrame, cols: list[str]) -> list[tuple[str, float]]:
 
 
 def run(config: Config, silver: pl.DataFrame, out_dir: str,
-        model_path: Optional[str] = None, state_db: Optional[str] = None) -> dict:
+        model_path: Optional[str] = None, state_db: Optional[str] = None,
+        context: Optional[dict] = None) -> dict:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
     canonical = from_silver(silver, airframe_key=config.features.airframe_key)
     eng = FeatureEngineer(config.features)
-    gold = eng.build_matrix(canonical)
+    gold = eng.build_matrix(canonical, context=context)
 
     gold_pq = str(out / "gold_features.parquet")
     write_table(gold, gold_pq)

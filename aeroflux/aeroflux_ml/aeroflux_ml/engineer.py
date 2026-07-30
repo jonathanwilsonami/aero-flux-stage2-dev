@@ -29,7 +29,7 @@ class FeatureEngineer:
             cols.extend(CHANNEL_OUTPUTS.get(name, []))
         return cols
 
-    def build(self, canonical: pl.DataFrame) -> pl.DataFrame:
+    def build(self, canonical: pl.DataFrame, context: dict | None = None) -> pl.DataFrame:
         missing = [c for c in CANONICAL_COLUMNS if c not in canonical.columns]
         if missing:
             raise ValueError(f"canonical frame missing columns: {missing} "
@@ -37,6 +37,8 @@ class FeatureEngineer:
 
         df = add_base_delays(canonical)
         cfg = {"window_minutes": self.config.window_minutes}
+        if context:                      # e.g. {"weather_obs": <metar frame>}
+            cfg.update(context)
         for name in self.config.enabled_channels():
             fn = CHANNELS.get(name)
             if fn is None:
@@ -44,9 +46,9 @@ class FeatureEngineer:
             df = fn(df, cfg)
         return df
 
-    def build_matrix(self, canonical: pl.DataFrame) -> pl.DataFrame:
+    def build_matrix(self, canonical: pl.DataFrame, context: dict | None = None) -> pl.DataFrame:
         """Just the id + feature columns (+ labels if present), ready to model."""
-        df = self.build(canonical)
+        df = self.build(canonical, context=context)
         keep = ["flight_key"] + self.feature_columns()
         for label in ("dep_delay_min", "arr_delay_min"):
             if label in df.columns:
