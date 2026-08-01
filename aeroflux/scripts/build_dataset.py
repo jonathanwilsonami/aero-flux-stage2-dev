@@ -27,7 +27,7 @@ from aeroflux_parser.sinks import JsonlSink, CsvSink
 from run_parser import iter_file, iter_postgres, iter_kafka
 
 
-def build(raw_iter, live: int):
+def build(raw_iter, live: int, adsb_store_dsn: str | None = None):
     reducer = FlightInstanceReducer()
     n_msg = 0
     for raw in raw_iter:
@@ -40,7 +40,12 @@ def build(raw_iter, live: int):
     table = AirlineTable()
     resolver = None
     remaining = {"n": live}
-    if live > 0:
+    if adsb_store_dsn:
+        # Preferred: resolve from the rolling store the poller fills (no API calls).
+        from aeroflux_parser.adsb_store import PostgresAirframeStore
+        resolver = PostgresAirframeStore(adsb_store_dsn).resolve
+    elif live > 0:
+        # Fallback: live per-callsign lookups (rate-limited; capped).
         from aeroflux_parser import AdsbClient
         client = AdsbClient()
 
@@ -104,6 +109,8 @@ def main() -> int:
         p.add_argument("--no-validate", dest="validate", action="store_false",
                        help="skip the pydantic schema-contract validation")
         p.set_defaults(validate=True)
+        p.add_argument("--adsb-store", dest="adsb_store", default=None,
+                       help="DSN of the rolling ADS-B store (from adsb_poller.py) to resolve tails from")
         p.add_argument("--live", type=int, default=0,
                        help="resolve up to N airline tails via live ADS-B")
 
@@ -115,7 +122,7 @@ def main() -> int:
     else:
         raw_iter = iter_kafka(args.bootstrap, args.topic, args.group, args.limit)
 
-    n_msg, rows = build(raw_iter, args.live)
+    n_msg, rows = build(raw_iter, args.live, getattr(args, "adsb_store", None))
     if not rows:
         sys.exit("No flight instances produced.")
 

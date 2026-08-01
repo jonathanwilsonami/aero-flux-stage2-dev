@@ -17,6 +17,7 @@ Field notes (ADSBExchange v2): in each aircraft object,
 from __future__ import annotations
 
 import json
+import os
 import urllib.request
 from dataclasses import dataclass
 
@@ -72,7 +73,14 @@ class AdsbClient:
 
     def _get(self, path: str) -> dict:
         url = f"{self.provider.base_url}{path}"
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        # A real User-Agent is required: the default 'Python-urllib/x' is blocked
+        # (403) by the feed's Cloudflare layer. Override with ADSB_USER_AGENT.
+        ua = os.getenv(
+            "ADSB_USER_AGENT",
+            "aeroflux-adsb/0.1 (research; +https://github.com/jonathanwilsonami/aero-flux-stage2-dev)",
+        )
+        req = urllib.request.Request(
+            url, headers={"Accept": "application/json", "User-Agent": ua})
         with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
@@ -81,6 +89,17 @@ class AdsbClient:
 
     def by_hex(self, hex_code: str) -> list[Airframe]:
         return parse_adsb_response(self._get(f"/hex/{hex_code.strip().lower()}"))
+
+    def by_point(self, lat: float, lon: float, radius_nm: int = 250) -> list[Airframe]:
+        """BULK: every aircraft within radius_nm of a point, in ONE request.
+
+        This is the poller's workhorse — one call returns hundreds of airframes
+        (hex + callsign + tail + type), instead of one lookup per flight. Radius
+        is capped at 250 nm by the feed. Costs a single request against the
+        1 req/sec limit, so a handful of circles cover the whole NAS cheaply."""
+        radius_nm = min(int(radius_nm), 250)
+        payload = self._get(f"/point/{lat}/{lon}/{radius_nm}")
+        return parse_adsb_response(payload)
 
     def resolve_tail(self, callsign: str) -> Airframe | None:
         """Best single airframe for a callsign, or None if the feed hasn't seen

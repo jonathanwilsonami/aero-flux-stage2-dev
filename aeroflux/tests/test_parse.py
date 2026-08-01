@@ -658,3 +658,65 @@ def test_build_feature_table_filters_and_shapes():
     rows = build_feature_table(silver)
     assert len(rows) == 2                         # planned one dropped
     assert set(rows[0].keys()) == set(ALL_COLUMNS)
+
+
+# --- ADS-B rolling store + bulk poller ------------------------------------
+
+from datetime import datetime, timedelta, timezone
+from aeroflux_parser.adsb import parse_adsb_response, Airframe
+from aeroflux_parser.adsb_store import InMemoryAirframeStore
+
+
+def test_by_point_response_parses_many_airframes():
+    # one /point request returns many aircraft (ADSBExchange v2 shape)
+    payload = {"ac": [
+        {"hex": "a1b2c3", "flight": "AAL2033 ", "r": "N826AA", "t": "A321"},
+        {"hex": "d4e5f6", "flight": "DAL1150 ", "r": "N901DL", "t": "B738"},
+        {"hex": "0a0b0c", "flight": "", "r": "", "t": ""},  # no callsign -> unusable
+    ]}
+    frames = parse_adsb_response(payload)
+    assert len(frames) == 3
+    assert frames[0].hex == "a1b2c3" and frames[0].callsign == "AAL2033"
+    assert frames[0].registration == "N826AA"
+
+
+def test_store_upsert_resolve_and_latest_wins():
+    store = InMemoryAirframeStore()
+    t0 = datetime(2026, 7, 30, 12, 0, tzinfo=timezone.utc)
+    store.upsert([Airframe(hex="a1b2c3", registration="N826AA", aircraft_type="A321", callsign="AAL2033")], seen_at=t0)
+    # a later sweep sees the same callsign on a different airframe -> newest wins
+    store.upsert([Airframe(hex="ffffff", registration="N999AA", callsign="AAL2033")], seen_at=t0 + timedelta(minutes=30))
+    frame = store.resolve("aal2033")           # case-insensitive
+    assert frame.hex == "ffffff"
+    assert store.resolve("UNKNOWN") is None
+
+
+def test_store_skips_callsignless_or_empty():
+    store = InMemoryAirframeStore()
+    n = store.upsert([
+        Airframe(hex="a1b2c3", callsign="AAL1"),   # ok
+        Airframe(hex="", registration="", callsign="AAL2"),  # no id -> skip
+        Airframe(hex="d4e5f6", callsign=""),        # no callsign -> skip
+    ])
+    assert n == 1 and len(store) == 1
+
+
+def test_store_purge_drops_stale_rows():
+    store = InMemoryAirframeStore()
+    old = datetime.now(timezone.utc) - timedelta(hours=72)
+    store.upsert([Airframe(hex="a1", callsign="OLD1")], seen_at=old)
+    store.upsert([Airframe(hex="b2", callsign="NEW1")])   # now
+    assert store.purge(older_than_hours=48) == 1
+    assert store.resolve("OLD1") is None and store.resolve("NEW1") is not None
+
+
+def test_store_resolve_is_a_valid_enrich_resolver():
+    # the store's .resolve is a drop-in for enrich_record's adsb_resolver
+    from aeroflux_parser import enrich_record
+    store = InMemoryAirframeStore()
+    store.upsert([Airframe(hex="a1b2c3", registration="N826AA", aircraft_type="A321", callsign="AAL2033")])
+    rec = enrich_record({"flight_instance_id": "F1", "callsign": "AAL2033"},
+                        adsb_resolver=store.resolve)
+    assert rec["hex"] == "a1b2c3"
+    assert rec["tail_number"] == "N826AA"
+    assert rec["tail_source"] == "adsb"

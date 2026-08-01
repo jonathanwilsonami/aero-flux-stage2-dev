@@ -80,6 +80,7 @@ SQL
 }
 
 cmd_consume(){ resolve_containers; nohup python kafka_to_postgres.py > kafka_to_postgres.log 2>&1 & echo "consumer started (PID $!, kafka_to_postgres.log)"; }
+cmd_adsb(){ resolve_containers; nohup python adsb_poller.py > adsb_poller.log 2>&1 & echo "adsb poller started (PID $!, adsb_poller.log)"; }
 cmd_ingest(){ local s="${1:-$INGEST_SECONDS}"; nohup python swim_to_kafka.py --duration "$s" > swim_to_kafka.log 2>&1 & echo "bridge started ${s}s (PID $!, swim_to_kafka.log)"; }
 
 cmd_pipeline(){
@@ -96,13 +97,15 @@ cmd_pipeline(){
   log "Gold ready: $OUT/gold_features.parquet (+ .csv)"
 }
 
-cmd_all(){ local s="${1:-$INGEST_SECONDS}"; cmd_setup; cmd_consume; cmd_ingest "$s"; log "Collecting ${s}s..."; sleep "$s"; cmd_pipeline; }
-cmd_status(){ docker compose -f "$COMPOSE_FILE" ps || true; echo "--- processes ---"; ps aux | grep -v grep | egrep 'swim_to_kafka|kafka_to_postgres' || echo "(none running)"; resolve_containers 2>/dev/null && { echo "--- rows ---"; pg -c "SELECT count(*) AS raw FROM $RAW_TABLE;" 2>/dev/null || true; pg -c "SELECT count(*) AS silver FROM flight_instance;" 2>/dev/null || true; } || true; }
+cmd_all(){ local s="${1:-$INGEST_SECONDS}"; cmd_setup; cmd_consume; cmd_adsb; cmd_ingest "$s"; log "Collecting ${s}s..."; sleep "$s"; cmd_pipeline; }
+cmd_status(){ docker compose -f "$COMPOSE_FILE" ps || true; echo "--- processes ---"; ps aux | grep -v grep | egrep 'swim_to_kafka|kafka_to_postgres' || echo "(none running)"; resolve_containers 2>/dev/null && { echo "--- rows ---"; pg -c "SELECT count(*) AS raw FROM $RAW_TABLE;" 2>/dev/null || true; pg -c "SELECT count(*) AS silver FROM flight_instance;" 2>/dev/null || true
+    pg -c "SELECT count(*) AS silver, count(hex) AS with_hex, round(100.0*count(hex)/NULLIF(count(*),0),1) AS hex_pct FROM flight_instance;" 2>/dev/null || true
+    pg -c "SELECT count(*) AS adsb_store FROM adsb_airframe;" 2>/dev/null || true; } || true; }
 cmd_stop(){ pkill -f swim_to_kafka.py 2>/dev/null || true; pkill -f kafka_to_postgres.py 2>/dev/null || true; echo "stopped"; }
 cmd_down(){ docker compose -f "$COMPOSE_FILE" down; }
 
 case "${1:-help}" in
-  setup) cmd_setup ;; consume) cmd_consume ;; ingest) cmd_ingest "${2:-}" ;;
+  setup) cmd_setup ;; consume) cmd_consume ;; adsb) cmd_adsb ;; ingest) cmd_ingest "${2:-}" ;;
   pipeline) cmd_pipeline ;; all) cmd_all "${2:-}" ;; status) cmd_status ;;
   stop) cmd_stop ;; down) cmd_down ;;
   *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' ;;
