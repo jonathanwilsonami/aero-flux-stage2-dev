@@ -24,6 +24,7 @@ notes-todos.txt
 *.xlsx
 *.json* 
 *.parquet
+!aeroflux/aeroflux_parser/data/*
 
 
 # Python 

@@ -87,31 +87,60 @@ def from_silver(
     )
 
 
+def localize_local_to_utc(df: pl.DataFrame, time_col: str, airport_col: str,
+                          tz_lookup: dict[str, str]) -> pl.DataFrame:
+    """Convert a naive local-time column to naive UTC, using each row's airport
+    timezone. Order-preserving. Rows whose airport has no known tz are left as-is
+    (documented gap) rather than silently shifted."""
+    if time_col not in df.columns or airport_col not in df.columns:
+        return df
+    tzdf = pl.DataFrame({airport_col: list(tz_lookup.keys()),
+                         "_tz": list(tz_lookup.values())})
+    d = df.with_row_index("_i").join(tzdf, on=airport_col, how="left")
+    parts = []
+    for tz in d["_tz"].unique().to_list():
+        sub = d.filter(pl.col("_tz").is_null() if tz is None else pl.col("_tz") == tz)
+        if tz is not None:
+            sub = sub.with_columns(
+                pl.col(time_col)
+                .dt.replace_time_zone(tz, ambiguous="earliest", non_existent="null")
+                .dt.convert_time_zone("UTC").dt.replace_time_zone(None).alias(time_col))
+        parts.append(sub.select("_i", time_col))
+    conv = pl.concat(parts)
+    return (df.with_row_index("_i").drop(time_col)
+              .join(conv, on="_i", how="left").sort("_i").drop("_i"))
+
+
 def from_bts(
     df: pl.DataFrame,
     *,
     airline_map: Optional[AirlineMap] = None,
     airport_map: Optional[AirportMap] = None,
+    airport_tz: Optional[dict[str, str]] = None,
 ) -> pl.DataFrame:
     """Map a BTS On-Time Performance frame to the parity schema.
 
     Expects BTS-style columns (FL_DATE, OP_UNIQUE_CARRIER/OP_CARRIER, TAIL_NUM,
     ORIGIN, DEST, CRS_DEP_TIME, DEP_TIME, CRS_ARR_TIME, ARR_TIME as HHMM ints or
-    parsed datetimes). Carrier/airport codes are normalized to ICAO."""
+    parsed datetimes). Carrier/airport codes are normalized to ICAO.
+
+    BTS times are LOCAL wall-clock. Pass `airport_tz` (an ICAO->IANA-tz map, e.g.
+    from AirportTable) to convert them to UTC so they line up with live SWIM
+    (already UTC) and with the UTC weather join. Departures use the origin tz,
+    arrivals the destination tz."""
     apt = airport_map or _default_airport_to_icao
     air = airline_map or (lambda c: c)  # supply an IATA->ICAO map for real parity
 
     def _bts_time(date_col: str, hhmm_col: str) -> pl.Expr:
-        # BTS times are local HHMM; for the prototype we parse to a datetime by
-        # combining FL_DATE + HHMM. (Time-zone handling is a documented follow-up
-        # that the airport dimension will supply.)
+        # BTS times are local HHMM; combine FL_DATE + HHMM into a naive datetime,
+        # then localize to UTC below if airport_tz is supplied.
         hhmm = pl.col(hhmm_col).cast(pl.Utf8).str.zfill(4)
         return (
             pl.col(date_col).cast(pl.Utf8) + "T" + hhmm.str.slice(0, 2) + ":" + hhmm.str.slice(2, 2)
         ).str.to_datetime(strict=False, time_unit="us")
 
     carrier_col = "OP_UNIQUE_CARRIER" if "OP_UNIQUE_CARRIER" in df.columns else "OP_CARRIER"
-    return df.select(
+    out = df.select(
         (pl.col("FL_DATE").cast(pl.Utf8) + "_" + pl.col(carrier_col).cast(pl.Utf8)
          + pl.col("OP_CARRIER_FL_NUM").cast(pl.Utf8)).alias("flight_key"),
         pl.col("TAIL_NUM").alias("airframe_key"),
@@ -123,6 +152,12 @@ def from_bts(
         _bts_time("FL_DATE", "DEP_TIME").alias("actual_dep"),   # true gate time
         _bts_time("FL_DATE", "ARR_TIME").alias("actual_arr"),
     )
+    if airport_tz:
+        out = localize_local_to_utc(out, "sched_dep", "origin", airport_tz)
+        out = localize_local_to_utc(out, "actual_dep", "origin", airport_tz)
+        out = localize_local_to_utc(out, "sched_arr", "destination", airport_tz)
+        out = localize_local_to_utc(out, "actual_arr", "destination", airport_tz)
+    return out
 
 
 def add_base_delays(df: pl.DataFrame) -> pl.DataFrame:
