@@ -12,7 +12,7 @@ packages = [
   { include = "aeroflux_ml" },
   { include = "aeroflux_parser" },
 ]
-include = ["aeroflux_parser/data/airlines.csv"]
+include = ["aeroflux_parser/data/airlines.csv", "aeroflux_parser/data/airports.csv"]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"

@@ -720,3 +720,52 @@ def test_store_resolve_is_a_valid_enrich_resolver():
     assert rec["hex"] == "a1b2c3"
     assert rec["tail_number"] == "N826AA"
     assert rec["tail_source"] == "adsb"
+
+
+# --- airport dimension: normalization, geo, tz -----------------------------
+
+from aeroflux_parser.airports import AirportTable, DEFAULT_AIRPORTS
+
+
+def test_airport_normalizes_iata_and_icao_to_one_canonical():
+    at = DEFAULT_AIRPORTS
+    assert at.to_icao("DFW") == "KDFW"      # IATA -> ICAO
+    assert at.to_icao("KDFW") == "KDFW"     # already ICAO
+    assert at.to_icao("dfw") == "KDFW"      # case-insensitive
+    assert at.to_icao("MMMY") == "MMMY"     # intl ICAO passes through
+    # the exact break we saw in the ENY3347 trace now unifies:
+    assert at.to_icao("DFW") == at.to_icao("KDFW")
+
+
+def test_airport_geo_and_tz_lookup():
+    at = DEFAULT_AIRPORTS
+    lat, lon = at.latlon("KDFW")
+    assert 32 < lat < 33 and -98 < lon < -97
+    assert at.tz("KDFW") == "America/Chicago"
+    assert at.tz("MMMY") == "America/Mexico_City"   # via ICAO
+    assert at.tz("ZZZZ") is None                    # unknown -> None
+
+
+def test_enrich_normalizes_airport_codes():
+    from aeroflux_parser import enrich_record
+    rec = enrich_record({"flight_instance_id": "F1", "callsign": "ENY3347",
+                         "origin": "DFW", "destination": "MTY"})
+    assert rec["origin"] == "KDFW"          # IATA normalized to ICAO
+    assert rec["destination"] == "MMMY"
+
+
+def test_dedup_collapses_flight_ref_amendment_duplicates():
+    from build_dataset import _dedup
+    # the ENY3347 case: same callsign/route/sched_dep, amended arrival -> 2 refs
+    rows = [
+        {"flight_ref": "1", "gufi": None, "callsign": "ENY3347", "origin": "MMMY",
+         "destination": "KDFW", "scheduled_gate_departure": "2026-07-31T00:11:00Z",
+         "scheduled_gate_arrival": "2026-07-31T01:57:00Z", "flight_status": "PLANNED"},
+        {"flight_ref": "2", "gufi": None, "callsign": "ENY3347", "origin": "MMMY",
+         "destination": "KDFW", "scheduled_gate_departure": "2026-07-31T00:11:00Z",
+         "scheduled_gate_arrival": "2026-07-31T01:56:00Z", "flight_status": "ACTIVE",
+         "actual_off": "2026-07-31T00:20:00Z"},  # more complete -> kept
+    ]
+    out = _dedup(rows)
+    assert len(out) == 1
+    assert out[0]["flight_status"] == "ACTIVE"      # kept the richer row

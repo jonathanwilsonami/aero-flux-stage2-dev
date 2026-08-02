@@ -64,15 +64,25 @@ def enrich_record(
     record: dict[str, Any],
     table: AirlineTable = DEFAULT_TABLE,
     adsb_resolver: Callable[[str], Any] | None = None,
+    airports: "AirportTable | None" = None,
 ) -> dict[str, Any]:
     """Add resolved identity + label + tail/hex to a fused canonical record.
 
     `adsb_resolver` is an optional callable: callsign -> Airframe|None
     (e.g. AdsbClient().resolve_tail). If absent, airline tails stay null.
+    `airports` normalizes origin/destination to canonical ICAO (DFW -> KDFW) so
+    rotations chain correctly; defaults to the bundled airport table.
     """
+    from .airports import DEFAULT_AIRPORTS
+    airports = airports or DEFAULT_AIRPORTS
     out = dict(record)  # never mutate the input
     callsign = out.get("callsign")
     parsed = parse_callsign(callsign or "", table)
+
+    # canonicalize airport codes (ICAO); keep original if unresolvable
+    for fld in ("origin", "destination"):
+        if out.get(fld):
+            out[fld] = airports.to_icao(out[fld]) or out[fld]
 
     out["resolution_status"] = classify(callsign, table)
     out["carrier_icao"] = parsed.airline_icao

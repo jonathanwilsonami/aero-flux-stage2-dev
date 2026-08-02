@@ -58,7 +58,28 @@ def build(raw_iter, live: int, adsb_store_dsn: str | None = None):
         resolver = capped
 
     enriched = [enrich_record(r, table, adsb_resolver=resolver) for r in fused]
+    enriched = _dedup(enriched)
     return n_msg, enriched
+
+
+def _dedup(rows: list[dict]) -> list[dict]:
+    """Collapse duplicate rows for one logical flight.
+
+    When a flight has no GUFI, plan amendments (a refile that nudges the
+    scheduled arrival by a minute) produce two flight_refs that never merge in
+    the reducer -- so the same flight appears twice. Key on GUFI when present,
+    else on (callsign, origin, destination, scheduled_gate_departure), and keep
+    the most complete row (most non-null fields; ties -> latest seen)."""
+    best: dict = {}
+    for r in rows:
+        key = r.get("gufi") or (
+            r.get("callsign"), r.get("origin"), r.get("destination"),
+            r.get("scheduled_gate_departure"),
+        )
+        score = sum(1 for v in r.values() if v not in (None, ""))
+        if key not in best or score >= best[key][0]:
+            best[key] = (score, r)
+    return [v[1] for v in best.values()]
 
 
 def summarize(n_msg: int, rows: list[dict]) -> None:

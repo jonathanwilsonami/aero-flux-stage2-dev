@@ -234,3 +234,38 @@ def test_weather_channel_column_manifest():
     assert set(CHANNEL_OUTPUTS["weather"]) == {
         "origin_wx_wind_kt", "origin_wx_vis_mi", "origin_wx_ifr",
         "dest_wx_wind_kt", "dest_wx_vis_mi", "dest_wx_ifr"}
+
+
+# --- BTS local-time -> UTC conversion via airport tz ------------------------
+
+def test_from_bts_converts_local_times_to_utc():
+    from aeroflux_ml.schema import from_bts
+    # KDFW is America/Chicago; late July -> CDT = UTC-5. 08:00 local -> 13:00 UTC.
+    bts = pl.DataFrame({
+        "FL_DATE": ["2026-07-30"], "OP_UNIQUE_CARRIER": ["AA"],
+        "OP_CARRIER_FL_NUM": ["100"], "TAIL_NUM": ["N826AA"],
+        "ORIGIN": ["DFW"], "DEST": ["LGA"],
+        "CRS_DEP_TIME": [800], "CRS_ARR_TIME": [1230],
+        "DEP_TIME": [805], "ARR_TIME": [1235],
+    })
+    tz = {"DFW": "America/Chicago", "LGA": "America/New_York",
+          "KDFW": "America/Chicago", "KLGA": "America/New_York"}
+    out = from_bts(bts, airport_tz=tz)
+    dep = out["sched_dep"][0]
+    assert dep.hour == 13 and dep.minute == 0        # 08:00 CDT -> 13:00 UTC
+    # arrival is New York (EDT = UTC-4): 12:30 local -> 16:30 UTC
+    arr = out["sched_arr"][0]
+    assert arr.hour == 16 and arr.minute == 30
+
+
+def test_from_bts_without_tz_stays_naive_local():
+    from aeroflux_ml.schema import from_bts
+    bts = pl.DataFrame({
+        "FL_DATE": ["2026-07-30"], "OP_UNIQUE_CARRIER": ["AA"],
+        "OP_CARRIER_FL_NUM": ["100"], "TAIL_NUM": ["N1"],
+        "ORIGIN": ["DFW"], "DEST": ["LGA"],
+        "CRS_DEP_TIME": [800], "CRS_ARR_TIME": [1230],
+        "DEP_TIME": [800], "ARR_TIME": [1230],
+    })
+    out = from_bts(bts)                    # no tz map -> unchanged local wall clock
+    assert out["sched_dep"][0].hour == 8
