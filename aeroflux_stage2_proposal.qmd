@@ -117,23 +117,16 @@ agent—integrating capabilities that prior work often treats separately.
 
 # Datasets
 
-The platform fuses four aviation and weather sources plus a documentation corpus,
-summarized in @tbl-datasets. FAA SWIM provides the authoritative live NAS flight
-state; ADS-B supplies the physical airframe identity (ICAO 24-bit address and
-registration) needed to link an aircraft's successive legs; NOAA METAR/TAF
-supplies weather, a leading delay driver; and the BTS On-Time Performance
-dataset—which includes actual gate times and tail numbers—provides historical
-training labels. Large-scale ADS-B research networks such as OpenSky demonstrate
-the usefulness of distributed aircraft surveillance data for aviation research
-[@schaefer2014opensky].
+The platform fuses live and historical aviation and weather sources, plus reference dimensions and a documentation corpus, summarized in @tbl-datasets. FAA SWIM provides the authoritative live NAS flight state [@faa_swim]; ADS-B supplies the physical airframe identity (ICAO 24-bit address and registration) needed to link an aircraft's successive legs, drawn from community feeds [@airplaneslive; @adsblol], whose research value is demonstrated by large-scale networks such as OpenSky [@schaefer2014opensky]; NOAA weather—a leading delay driver—is drawn from live METAR via the Aviation Weather Center [@awc_metar] for serving and the NCEI Integrated Surface Database for historical training [@ncei_isd]; and the BTS On-Time Performance dataset, which includes actual gate times and tail numbers, provides historical training labels [@bts_ontime]. Reference dimensions for airports and airlines [@ourairports; @openflights] support entity resolution, code normalization, and timezone alignment.
 
 | Source | Type | Role | Retention | Estimated retained size |
 |---|---|---|---|---|
 | FAA SWIM (TFMS) | Streaming XML | Live flight state (primary) | 48 h | Approximately 5–25 GB |
 | ADS-B (airplanes.live / adsb.lol) | Streaming JSON | Airframe and tail resolution | 48 h | Approximately 2–10 GB |
-| NOAA METAR / TAF | Polled JSON / text | Weather observations and forecasts | 48 h | Approximately 50–250 MB |
+| NOAA weather — METAR (AWC) + NCEI ISD hourly | Polled JSON / text | Weather: METAR for serving, NCEI for training | 48 h | Approximately 50–250 MB live |
 | BTS On-Time Performance | Historical CSV / Parquet | Historical training labels | Persistent | Approximately 20–40 GB as CSV or 4–10 GB as Parquet |
 | Aviation documents (FAA, SWIM dictionaries, and related references) | PDF / HTML / text | RAG documentation corpus | Persistent | Approximately 0.5–2 GB, including extracted text and embeddings |
+| Reference dimensions (airports, airlines) | Static CSV | 	Entity resolution, ICAO/IATA + timezone normalization | Persistent | < 50 MB |
 
 : AeroFlux Stage 2 data sources, retention policies, and estimated storage requirements. Estimated sizes are project-planning ranges rather than published source totals and depend on geographic scope, ingestion frequency, selected fields, compression, and duplicate handling. {#tbl-datasets}
 

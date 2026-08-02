@@ -244,7 +244,7 @@ div.csl-indent {
 <section id="introduction" class="level1" data-number="1">
 <h1 data-number="1"><span class="header-section-number">1</span> Introduction</h1>
 <p>Flight delays are among the most costly and disruptive failures in the U.S. National Airspace System (NAS), and they rarely occur in isolation. A single late arrival propagates downstream through the same aircraft’s rotation and through shared airport departure and arrival queues, so a local disturbance becomes a network-wide disruption.</p>
-<p>Although airlines, airports, and air traffic authorities increasingly use real-time and predictive decision-support systems, these capabilities are often specialized around particular organizations, operational domains, or stages of flight. For example, the FAA’s Traffic Flow Management System supports demand-and-capacity management across the National Airspace System, while Terminal Flight Data Manager integrates surface and national traffic-management data to improve airport operations <span class="citation" data-cites="faa_nextgen_2024 faa_tfdm_2020">(<a href="#ref-faa_tfdm_2020" role="doc-biblioref">Federal Aviation Administration, 2020</a>, <a href="#ref-faa_nextgen_2024" role="doc-biblioref">2024b</a>)</span>. Commercial platforms such as Sabre Mosaic support airline disruption recovery, and Assaia ApronAI uses computer vision and machine learning to monitor aircraft turnarounds and predict departure readiness <span class="citation" data-cites="sabre_disruption_management assaia_apronai">(<a href="#ref-assaia_apronai" role="doc-biblioref">Assaia International AG, n.d.</a>; <a href="#ref-sabre_disruption_management" role="doc-biblioref">Sabre Corporation, n.d.</a>)</span>. Opportunities therefore remain for integrated research platforms that fuse multiple live aviation data streams, model delay propagation across the broader flight network, and support forecasting, simulation, data science, and AI-assisted analysis.</p>
+<p>Although airlines, airports, and air traffic authorities increasingly use real-time and predictive decision-support systems, these capabilities are often specialized around particular organizations, operational domains, or stages of flight. For example, the FAA’s Traffic Flow Management System supports demand-and-capacity management across the National Airspace System, while Terminal Flight Data Manager integrates surface and national traffic-management data to improve airport operations <span class="citation" data-cites="faa_nextgen_2024 faa_tfdm_2020">(<a href="#ref-faa_tfdm_2020" role="doc-biblioref">Federal Aviation Administration, 2020</a>, <a href="#ref-faa_nextgen_2024" role="doc-biblioref">2024c</a>)</span>. Commercial platforms such as Sabre Mosaic support airline disruption recovery, and Assaia ApronAI uses computer vision and machine learning to monitor aircraft turnarounds and predict departure readiness <span class="citation" data-cites="sabre_disruption_management assaia_apronai">(<a href="#ref-assaia_apronai" role="doc-biblioref">Assaia International AG, n.d.</a>; <a href="#ref-sabre_disruption_management" role="doc-biblioref">Sabre Corporation, n.d.</a>)</span>. Opportunities therefore remain for integrated research platforms that fuse multiple live aviation data streams, model delay propagation across the broader flight network, and support forecasting, simulation, data science, and AI-assisted analysis.</p>
 <p><strong>Scope</strong>. The long-term vision for AeroFlux is ambitious and continues to evolve. Stage 2 therefore focuses on building a scalable, modular, configurable, portable, and decoupled big-data platform that can ingest, fuse, process, and analyze aviation and weather data in real time. This platform is intended to establish the technical foundation for future AeroFlux capabilities.</p>
 <p>Flight-delay prediction serves as the primary use case, but the architecture is designed to support additional applications, including congestion analysis, delay-propagation modeling, operational monitoring, decision support, and agentic AI. Stage 1 established a historical machine-learning pipeline and interactive prototype <span class="citation" data-cites="wilson2026flightdelay">(<a href="#ref-wilson2026flightdelay" role="doc-biblioref">Wilson et al., 2026</a>)</span>. Stage 2 extends that work by introducing a live data platform, comparing baseline and advanced predictive models, and developing an explainable analyst agent as an initial prototype.</p>
 <p><strong>Technical challenges.</strong> Building this platform requires solving several non-trivial problems:</p>
@@ -278,7 +278,7 @@ div.csl-indent {
 </section>
 <section id="datasets" class="level1" data-number="4">
 <h1 data-number="4"><span class="header-section-number">4</span> Datasets</h1>
-<p>The platform fuses four aviation and weather sources plus a documentation corpus, summarized in <a href="#tbl-datasets" class="quarto-xref">Table&nbsp;1</a>. FAA SWIM provides the authoritative live NAS flight state; ADS-B supplies the physical airframe identity (ICAO 24-bit address and registration) needed to link an aircraft’s successive legs; NOAA METAR/TAF supplies weather, a leading delay driver; and the BTS On-Time Performance dataset—which includes actual gate times and tail numbers—provides historical training labels. Large-scale ADS-B research networks such as OpenSky demonstrate the usefulness of distributed aircraft surveillance data for aviation research <span class="citation" data-cites="schaefer2014opensky">(<a href="#ref-schaefer2014opensky" role="doc-biblioref">Schäfer et al., 2014</a>)</span>.</p>
+<p>The platform fuses live and historical aviation and weather sources, plus reference dimensions and a documentation corpus, summarized in <a href="#tbl-datasets" class="quarto-xref">Table&nbsp;1</a>. FAA SWIM provides the authoritative live NAS flight state <span class="citation" data-cites="faa_swim">(<a href="#ref-faa_swim" role="doc-biblioref">Federal Aviation Administration, 2024b</a>)</span>; ADS-B supplies the physical airframe identity (ICAO 24-bit address and registration) needed to link an aircraft’s successive legs, drawn from community feeds <span class="citation" data-cites="airplaneslive adsblol">(<a href="#ref-adsblol" role="doc-biblioref"><span class="nocase">adsb.lol</span>, 2026</a>; <a href="#ref-airplaneslive" role="doc-biblioref"><span class="nocase">airplanes.live</span>, 2026</a>)</span>, whose research value is demonstrated by large-scale networks such as OpenSky <span class="citation" data-cites="schaefer2014opensky">(<a href="#ref-schaefer2014opensky" role="doc-biblioref">Schäfer et al., 2014</a>)</span>; NOAA weather—a leading delay driver—is drawn from live METAR via the Aviation Weather Center <span class="citation" data-cites="awc_metar">(<a href="#ref-awc_metar" role="doc-biblioref">National Oceanic and Atmospheric Administration, 2026</a>)</span> for serving and the NCEI Integrated Surface Database for historical training <span class="citation" data-cites="ncei_isd">(<a href="#ref-ncei_isd" role="doc-biblioref">National Centers for Environmental Information, 2026</a>)</span>; and the BTS On-Time Performance dataset, which includes actual gate times and tail numbers, provides historical training labels <span class="citation" data-cites="bts_ontime">(<a href="#ref-bts_ontime" role="doc-biblioref">Bureau of Transportation Statistics, 2026</a>)</span>. Reference dimensions for airports and airlines <span class="citation" data-cites="ourairports openflights">(<a href="#ref-openflights" role="doc-biblioref">OpenFlights, 2026</a>; <a href="#ref-ourairports" role="doc-biblioref">OurAirports, 2026</a>)</span> support entity resolution, code normalization, and timezone alignment.</p>
 <div id="tbl-datasets" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-datasets-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -318,11 +318,11 @@ Table&nbsp;1: AeroFlux Stage 2 data sources, retention policies, and estimated s
 <td>Approximately 2–10 GB</td>
 </tr>
 <tr class="odd">
-<td>NOAA METAR / TAF</td>
+<td>NOAA weather — METAR (AWC) + NCEI ISD hourly</td>
 <td>Polled JSON / text</td>
-<td>Weather observations and forecasts</td>
+<td>Weather: METAR for serving, NCEI for training</td>
 <td>48 h</td>
-<td>Approximately 50–250 MB</td>
+<td>Approximately 50–250 MB live</td>
 </tr>
 <tr class="even">
 <td>BTS On-Time Performance</td>
@@ -337,6 +337,13 @@ Table&nbsp;1: AeroFlux Stage 2 data sources, retention policies, and estimated s
 <td>RAG documentation corpus</td>
 <td>Persistent</td>
 <td>Approximately 0.5–2 GB, including extracted text and embeddings</td>
+</tr>
+<tr class="even">
+<td>Reference dimensions (airports, airlines)</td>
+<td>Static CSV</td>
+<td>Entity resolution, ICAO/IATA + timezone normalization</td>
+<td>Persistent</td>
+<td>&lt; 50 MB</td>
 </tr>
 </tbody>
 </table>
@@ -522,6 +529,12 @@ Table&nbsp;3: One-month project timeline and effort allocation.
 <section id="references" class="level1 unnumbered">
 <h1 class="unnumbered">References</h1>
 <div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" data-line-spacing="2" role="list">
+<div id="ref-adsblol" class="csl-entry" role="listitem">
+<span class="nocase">adsb.lol</span>. (2026). <em><span class="nocase">adsb.lol</span> <span>ADS-B</span> <span>API</span></em>. <a href="https://api.adsb.lol/docs" class="uri">https://api.adsb.lol/docs</a>.
+</div>
+<div id="ref-airplaneslive" class="csl-entry" role="listitem">
+<span class="nocase">airplanes.live</span>. (2026). <em><span class="nocase">airplanes.live</span> <span>ADS-B</span> <span>API</span></em>. <a href="https://airplanes.live/api-guide/" class="uri">https://airplanes.live/api-guide/</a>.
+</div>
 <div id="ref-airspaceIntelligencePrescience" class="csl-entry" role="listitem">
 Airspace Intelligence. ({n.d.}). <em><span>PRESCIENCE</span> platform</em>. <a href="https://www.airspace-intelligence.com/platform">https://www.airspace-intelligence.com/platform</a>
 </div>
@@ -540,6 +553,9 @@ Beatty, R., Hsu, R., Berry, L., &amp; Rome, J. (1999). Preliminary evaluation of
 <div id="ref-belcastro2016flight" class="csl-entry" role="listitem">
 Belcastro, L., Marozzo, F., Talia, D., &amp; Trunfio, P. (2016). Using scalable data mining for predicting flight delays. <em>ACM Transactions on Intelligent Systems and Technology</em>, <em>8</em>(1), 1–20.
 </div>
+<div id="ref-bts_ontime" class="csl-entry" role="listitem">
+Bureau of Transportation Statistics. (2026). <em>Reporting carrier on-time performance</em>. <a href="https://www.transtats.bts.gov/Tables.asp?DB_ID=120" class="uri">https://www.transtats.bts.gov/Tables.asp?DB_ID=120</a>.
+</div>
 <div id="ref-chen2016xgboost" class="csl-entry" role="listitem">
 Chen, T., &amp; Guestrin, C. (2016). <span>XGBoost</span>: A scalable tree boosting system. <em>Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining</em>, 785–794.
 </div>
@@ -549,8 +565,11 @@ Federal Aviation Administration. (2020). <em><span>TFDM</span> capabilities</em>
 <div id="ref-faa2024airoadmap" class="csl-entry" role="listitem">
 Federal Aviation Administration. (2024a). <em>Roadmap for artificial intelligence safety assurance</em>. Federal Aviation Administration. <a href="https://www.faa.gov/media/82891">https://www.faa.gov/media/82891</a>
 </div>
+<div id="ref-faa_swim" class="csl-entry" role="listitem">
+Federal Aviation Administration. (2024b). <em>System wide information management (<span>SWIM</span>)</em>. <a href="https://www.faa.gov/air_traffic/technology/swim" class="uri">https://www.faa.gov/air_traffic/technology/swim</a>.
+</div>
 <div id="ref-faa_nextgen_2024" class="csl-entry" role="listitem">
-Federal Aviation Administration. (2024b). <em>NextGen</em>. U.S. Department of Transportation. <a href="https://www.faa.gov/newsroom/nextgen">https://www.faa.gov/newsroom/nextgen</a>
+Federal Aviation Administration. (2024c). <em>NextGen</em>. U.S. Department of Transportation. <a href="https://www.faa.gov/newsroom/nextgen">https://www.faa.gov/newsroom/nextgen</a>
 </div>
 <div id="ref-flightawareForesight" class="csl-entry" role="listitem">
 FlightAware. ({n.d.}). <em>FlightAware foresight predictive flight tracking</em>. <a href="https://uk.flightaware.com/commercial/foresight/">https://uk.flightaware.com/commercial/foresight/</a>
@@ -572,6 +591,18 @@ Lundberg, S. M., &amp; Lee, S.-I. (2017). A unified approach to interpreting mod
 </div>
 <div id="ref-nasa2021atd2fuser" class="csl-entry" role="listitem">
 National Aeronautics and Space Administration. (2021). <em>Airspace technology demonstration 2 (<span>ATD-2</span>) fuser</em>. Computer software; GitHub. <a href="https://github.com/nasa/atd2-fuser">https://github.com/nasa/atd2-fuser</a>
+</div>
+<div id="ref-ncei_isd" class="csl-entry" role="listitem">
+National Centers for Environmental Information. (2026). <em>Integrated surface database (<span>ISD</span>) / global hourly</em>. <a href="https://www.ncei.noaa.gov/products/land-based-station/integrated-surface-database" class="uri">https://www.ncei.noaa.gov/products/land-based-station/integrated-surface-database</a>.
+</div>
+<div id="ref-awc_metar" class="csl-entry" role="listitem">
+National Oceanic and Atmospheric Administration. (2026). <em>Aviation weather center <span>METAR</span> data <span>API</span></em>. <a href="https://aviationweather.gov/data/api/" class="uri">https://aviationweather.gov/data/api/</a>.
+</div>
+<div id="ref-openflights" class="csl-entry" role="listitem">
+OpenFlights. (2026). <em><span>OpenFlights</span> airline database</em>. <a href="https://openflights.org/data.html" class="uri">https://openflights.org/data.html</a>.
+</div>
+<div id="ref-ourairports" class="csl-entry" role="listitem">
+OurAirports. (2026). <em><span>OurAirports</span> open data</em>. <a href="https://ourairports.com/data/" class="uri">https://ourairports.com/data/</a>.
 </div>
 <div id="ref-pepper2026probabilisticTwin" class="csl-entry" role="listitem">
 Pepper, N., Keane, A., Hodgkin, A., Gould, D., Henderson, E., Lauritsen, L., Vlahos, C., De Ath, G., Everson, R., Cannon, R., Sierra Castro, A., Korna, J., Carvell, B., &amp; Thomas, M. (2026). A probabilistic digital twin of <span>UK</span> en route airspace for training and evaluating <span>AI</span> agents for air traffic control. <em>AIAA SciTech Forum</em>. <a href="https://doi.org/10.2514/6.2026-1794">https://doi.org/10.2514/6.2026-1794</a>
