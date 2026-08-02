@@ -1,7 +1,9 @@
 ---
 title: "AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence"
 subtitle: "Formal Project Proposal"
-author: "Jonathan Wilson"
+author:
+  - Jonathan Wilson
+  - Ryan Sollom
 date: "2026-07-18"
 
 format:
@@ -42,17 +44,13 @@ Flight delays are among the most costly and disruptive failures in the U.S.
 National Airspace System (NAS), and they rarely occur in isolation. A single
 late arrival propagates downstream through the same aircraft's rotation and
 through shared airport departure and arrival queues, so a local disturbance
-becomes a network-wide disruption. Existing airline and airport tools remain
-largely retrospective or single-source, reporting delays after they occur rather
-than anticipating them from the live state of the airspace.
+becomes a network-wide disruption. 
 
-**Scope.** AeroFlux Stage 2 builds a *scalable, modular, configurable, portable,
-and decoupled* big-data platform that ingests, fuses, processes, and analyzes
-aviation and weather data in real time. The primary use case is flight-delay
-prediction; the same architecture is designed to support congestion analysis,
-delay-propagation modeling, operational monitoring, decision support, and
-agentic AI. [Stage 1](https://jonathanwilsonami.github.io/OR568_ML_Project/) established a historical machine-learning pipeline and an interactive prototype [@wilson2026flightdelay]; Stage 2 adds the live data platform, a
-baseline-versus-advanced model comparison, and an explainable analyst agent.
+Although airlines, airports, and air traffic authorities increasingly use real-time and predictive decision-support systems, these capabilities are often specialized around particular organizations, operational domains, or stages of flight. For example, the FAA’s Traffic Flow Management System supports demand-and-capacity management across the National Airspace System, while Terminal Flight Data Manager integrates surface and national traffic-management data to improve airport operations [@faa_nextgen_2024; @faa_tfdm_2020]. Commercial platforms such as Sabre Mosaic support airline disruption recovery, and Assaia ApronAI uses computer vision and machine learning to monitor aircraft turnarounds and predict departure readiness [@sabre_disruption_management; @assaia_apronai]. Opportunities therefore remain for integrated research platforms that fuse multiple live aviation data streams, model delay propagation across the broader flight network, and support forecasting, simulation, data science, and AI-assisted analysis.
+
+**Scope**. The long-term vision for AeroFlux is ambitious and continues to evolve. Stage 2 therefore focuses on building a scalable, modular, configurable, portable, and decoupled big-data platform that can ingest, fuse, process, and analyze aviation and weather data in real time. This platform is intended to establish the technical foundation for future AeroFlux capabilities.
+
+Flight-delay prediction serves as the primary use case, but the architecture is designed to support additional applications, including congestion analysis, delay-propagation modeling, operational monitoring, decision support, and agentic AI. Stage 1 established a historical machine-learning pipeline and interactive prototype [@wilson2026flightdelay]. Stage 2 extends that work by introducing a live data platform, comparing baseline and advanced predictive models, and developing an explainable analyst agent as an initial prototype.
 
 **Technical challenges.** Building this platform requires solving several
 non-trivial problems: 
@@ -73,15 +71,11 @@ Several of these challenges have already been partially addressed through a work
 
 # Related Work
 
-**Machine-learning delay prediction.** Most prior work frames delay prediction
+**Machine-learning delay prediction.** Prior work frames delay prediction
 as supervised classification or regression over historical records. The review
 by @sternberg2017review describes the major approaches used for flight-delay
 prediction, while more recent work continues to evaluate machine-learning
-algorithms and class-imbalance handling [@albassam2025flight]. These approaches
-can achieve strong accuracy on curated historical data, but they are often
-retrospective, single-source, and treat flights as independent observations,
-which limits their ability to represent the network coupling that drives
-real-world disruptions.
+algorithms and class-imbalance handling [@albassam2025flight]. These approaches can achieve strong predictive performance on curated historical datasets. However, when used in isolation, they may remain largely retrospective, rely on a limited set of data sources, and model flights as independent observations. These assumptions can restrict their ability to capture the temporal, spatial, and operational dependencies through which delays propagate across the aviation network.
 
 **Delay-propagation modeling.** A separate literature models how delays ripple
 through airline schedules. @beatty1999preliminary introduced an early method for
@@ -98,7 +92,11 @@ includes NASA's Airspace Technology Demonstration 2 (ATD-2) *Fuser*, which fuses
 multiple aviation data sources into a unified flight record
 [@nasa2021atd2fuser]. Its strength is production-grade fused operational data;
 its limitation for this project is that it is not designed as a lightweight,
-open, extensible ML/AI experimentation platform.
+open, extensible ML/AI experimentation platform. This project actually leverages some of the high level
+concepts used in ATD-2 to create our own fuser. 
+
+**Emerging aviation intelligence systems.** Recent operational systems show that the field is moving beyond static delay prediction toward real-time prediction, simulation, and decision support. FlightAware Foresight represents production ML-driven predictive flight tracking, including arrival-time, taxi-out, and runway predictions [@flightawareForesight]. NASA’s NAS Digital Twin and Project Bluebird extend this direction toward replayable and probabilistic simulation environments for live or historical airspace operations and AI-agent evaluation [@lauderdale2024nasDigitalTwin; @pepper2026probabilisticTwin]. Commercial platforms such as Airspace Intelligence PRESCIENCE, Lufthansa Systems NetLine/Ops++ aiOCC, and Amadeus Flight Operations Control show the market moving toward 4D operating-domain twins, AI-assisted operations control, disruption recovery, and resource-aware decision support [@airspaceIntelligencePrescience; @lufthansa2025aiocc; @amadeusFlightOps]. Recent prototypes such as FlightSense further combine rotation-chain features, real-time MLOps, and conversational/agentic interfaces for delay prediction [@shelke2026flightsense], while the FAA AI safety roadmap highlights the need for assurance, incremental deployment, and aviation-specific safety methods when adding AI to operational contexts [@faa2024airoadmap]. Together, these efforts motivate AeroFlux as a lightweight, SWIM-native experimentation platform that connects real-time data fusion, propagation-aware ML, replay, and explainable/agentic analysis rather than treating delay prediction as a standalone model.
+
 
 **Relevance of this approach.** AeroFlux Stage 2 bridges these strands. It
 couples lightweight, Fuser-inspired real-time fusion and entity resolution with
@@ -114,10 +112,8 @@ agent—integrating capabilities that prior work often treats separately.
 3. Compare a baseline model against an advanced, propagation- and
    weather-aware model for arrival-delay prediction.
 4. Evaluate both **predictive** performance and **system** performance.
-5. Provide a starter *Aviation Operations Analyst Agent* that retrieves evidence,
-   explains model predictions, and recommends analytical next steps—without
-   making operational decisions.
-6. Achieve a demonstrable minimum implementation within approximately one month.
+5. Develop and evaluate a starter Aviation Operations Analyst that uses retrieval, model invocation, explainability, and structured tool calling to produce evidence-grounded disruption-investigation briefs without making operational decisions.
+6. Define stable tool interfaces that can later support knowledge graphs, operational-event replay, simulation, MCP integration, and specialized agent workflows without requiring replacement of the underlying data platform.
 
 # Datasets
 
@@ -167,50 +163,62 @@ pipeline fuses by GUFI across many messages over time.
 
 # Methodology and Proposed Solution
 
-**Pipeline.** Ingestion services publish each source to a dedicated Kafka topic
-(48-hour retention). Apache Spark Structured Streaming consumes these topics and
-applies the existing `aeroflux_parser` library to parse, normalize, validate
-against a strict schema contract, and fuse messages into per-flight records via
-GUFI-keyed, source-priority mediation, with `flight_ref` used only as a
-reconciliation bridge and ADS-B used to resolve the tail. Fused records land in
-MongoDB (silver, 48-hour TTL) and, together with BTS backfill, in a MinIO
-data lake (gold parquet). The full architecture is shown in @fig-aeroflux2-arch.
+**Architecture.** AeroFlux Stage 2 is a streaming lakehouse: heterogeneous
+aviation and weather sources are ingested continuously, processed by a
+distributed compute engine, and persisted across bronze → silver → gold tiers.
+Every component runs as a container, so the platform deploys unchanged on a
+laptop, university hardware, or a single cloud VM, with managed AWS services as
+an optional scale path rather than a requirement. The full architecture is shown
+in @fig-aeroflux2-arch.
 
-![AeroFlux Stage 2 system architecture.](/images/design/aeroflux2-arch.png){#fig-aeroflux2-arch .lightbox}
+::: {.content-visible when-format="html"}
+![AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud.](images/design/aeroflux2-arch-v2.svg){#fig-aeroflux2-arch .lightbox}
+:::
 
-**Baseline versus advanced models.** The baseline is a logistic-regression
-classifier on flight-level features (carrier, origin, destination, scheduled
-times). The advanced model is a gradient-boosted tree using XGBoost
-[@chen2016xgboost] and is enriched with *propagation* features (previous-leg
-arrival delay and scheduled turnaround buffer), weather features, and rolling
-airport demand. This design directly operationalizes findings from the delay-
-propagation literature [@beatty1999preliminary; @kafle2016propagation]. Both
-models target a 15-minute arrival-delay classification, with class imbalance
-addressed through resampling, a concern emphasized in recent delay-prediction
-research [@albassam2025flight]. Models are tracked in MLflow and explained with
-SHAP [@lundberg2017shap], whose outputs feed the agent.
+::: {.content-visible when-format="pdf"}
+![AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud.](images/design/aeroflux2-arch-v2.pdf){#fig-aeroflux2-arch-pdf}
+:::
 
-**Evaluation.** Both predictive and system performance are evaluated
-(@tbl-models). Predictive metrics include ROC-AUC, PR-AUC, F1, and Brier score
-and calibration, using point-in-time features to prevent leakage. System metrics
-include end-to-end latency, sustained message throughput, fusion completeness
-(fields populated per flight), and resource footprint.
+**Ingestion and streaming.** Dedicated services publish each source—SWIM flight
+messages, ADS-B, and weather—to a dedicated Apache Kafka topic with 48-hour
+retention, decoupling producers from consumers and providing a replayable event
+history. Apache Spark Structured Streaming consumes these topics as the
+platform's primary big-data compute engine, applying the `aeroflux_parser`
+library to validate each message against a strict schema contract and fuse
+messages into per-flight canonical records—keyed on the stable GUFI, with ADS-B
+used to resolve the aircraft tail that SWIM omits.
 
-| Dimension | Baseline | Advanced | Metrics |
-|---|---|---|---|
-| Model | Logistic Regression | XGBoost + propagation + weather | ROC-AUC, PR-AUC, F1, Brier |
-| Features | Flight-level | + propagation, weather, demand | Feature importance (SHAP) |
-| System | — | Streaming pipeline | Latency, throughput, completeness |
+**Storage tiers and retention.** Processing follows a bronze → silver → gold
+progression. Raw and fused per-flight state are held hot in PostgreSQL on a
+rolling 48-hour window; current per-flight predictions are served from a NoSQL
+store (Amazon DynamoDB in the cloud); and canonical and gold feature/label tables
+are written as partitioned Parquet to a MinIO / Amazon S3 data lake, queryable in
+place through Amazon Athena over an AWS Glue catalog. Short retention keeps the
+streaming footprint small and low-cost, while the lake retains durable history
+for training and replay. Because storage backends sit behind configuration, the
+local stack (PostgreSQL, MinIO) swaps to managed cloud services (RDS, S3) with no
+code change.
 
-: Baseline-versus-advanced comparison and evaluation plan. {#tbl-models}
+**Machine learning.** The same Spark engine runs feature engineering and XGBoost
+inference via `foreachBatch`, comparing a logistic-regression baseline against an
+advanced gradient-boosted model enriched with propagation, weather, and rolling
+airport-demand features [@chen2016xgboost; @beatty1999preliminary;
+@kafle2016propagation]. Feature engineering is expressed once in a source-agnostic
+core, so historical (BTS) training and live serving compute identical features by
+construction; that core runs on Polars locally for development and in Spark at
+scale. Both models target a 15-minute arrival-delay classification, are tracked
+in MLflow, and are explained with SHAP [@lundberg2017shap].
 
-**Agentic AI and LLM approach.** The starter *Aviation Operations Analyst Agent*
-answers natural-language questions (for example, "Why is this flight likely
-delayed?") by combining retrieval-augmented generation [@lewis2020rag] over the
-aviation-documentation corpus (embeddings in pgvector) with tool calls that query
-the fused databases, invoke the delay model, and return SHAP explanations. The
-agent retrieves evidence, explains predictions, and recommends next steps; it
-does **not** execute operational aviation decisions.
+**AI orchestration prototype.** A lightweight *Aviation Operations Analyst* uses
+retrieval-augmented generation [@lewis2020rag] and a constrained LangGraph
+workflow over a curated aviation-document corpus to produce cited, evidence-
+grounded briefs; it does not touch live streaming data or make operational
+decisions, and is evaluated on a small set of reviewed questions for
+groundedness, citation accuracy, and appropriate tool use. As an optional stretch
+goal, a read-only Model Context Protocol (MCP) server may expose these tools
+through a standardized interface.
+
+**Evaluation.** Both predictive and system performance are evaluated.
 
 # Development Environment
 
@@ -226,12 +234,16 @@ few dollars of LLM API usage).
 |---|---|
 | Language | Python 3.11 |
 | Streaming | Apache Kafka, Spark Structured Streaming |
-| Storage | MongoDB, PostgreSQL + pgvector, MinIO (S3-compatible) |
-| ML | scikit-learn, XGBoost [@chen2016xgboost], MLflow, SHAP [@lundberg2017shap] |
-| LLM / RAG | Claude API, pgvector, tool-calling agent loop |
+| Storage | MongoDB, PostgreSQL + pgvector, MinIO / Amazon S3 |
+| Historical replay | Kafka offsets and immutable Parquet event history in MinIO / S3 |
+| ML | scikit-learn, XGBoost, Spark ML, MLflow, SHAP |
+| AI orchestration | LangGraph constrained workflow with read-only tool calling |
+| LLM / RAG | Claude API or Amazon Bedrock; pgvector semantic retrieval |
+| Agent tools | Document search, operational-data query, model inference, SHAP explanation, event reconstruction |
 | Serving / UI | FastAPI, Dash / Plotly |
-| Orchestration | Prefect |
-| Packaging / Platform | Docker + Docker Compose; optional AWS EC2 + S3 |
+| Orchestration | Prefect, Airflow or other |
+| Interoperability | Optional read-only AeroFlux MCP server |
+| Packaging / Platform | Docker Compose; optional AWS EC2, S3, and EMR Serverless |
 
 : Development environment and technology stack. {#tbl-stack}
 
@@ -245,10 +257,10 @@ timeline.
 
 | Week | Tasks | Est. hours |
 |---|---|---|
-| 1 | Add weather source; Spark Structured Streaming pipeline; MongoDB silver store + TTL | 20 |
-| 2 | Feature engineering (propagation, demand, weather); gold dataset; baseline vs. advanced training; MLflow; evaluation | 22 |
-| 3 | FastAPI inference API + SHAP; pgvector RAG; analyst agent + tools | 22 |
-| 4 | Integration, UI wiring, system + predictive evaluation, demo, write-up; buffer | 18 |
+| 1 | Complete streaming and weather integration; prepare MongoDB records, documentation corpus, and two or three historical investigation scenarios | 20 |
+| 2 | Feature engineering; baseline and advanced model evaluation; MLflow tracking; SHAP explanation service | 22 |
+| 3 | Build pgvector retrieval pipeline and LangGraph analyst workflow; implement document-search, flight-query, prediction, explanation, and event-reconstruction tools | 22 |
+| 4 | Integrate the analyst UI; create agent evaluation cases; measure groundedness, tool selection, latency, and predictive/system performance; complete demonstration and write-up | 18 |
 
 : One-month project timeline and effort allocation. {#tbl-timeline}
 
