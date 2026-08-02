@@ -2,15 +2,19 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.8.26">
+<meta name="generator" content="quarto-1.9.36">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Jonathan Wilson">
+<meta name="author" content="Ryan Sollom">
 <meta name="dcterms.date" content="2026-07-18">
 
 <title>AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence – AeroFlux Stage 2 Project</title>
 <style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -89,15 +93,14 @@ div.csl-indent {
 <meta name="quarto:offset" content="./">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-b758ccaa5987ceb1b75504551e579abf.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-f418161beb48e0141c760e455f12af2c.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-d8a18cee56031974d1f8f6eead200d41.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-8b9b450fba28b21070ed4f8d6716e9d1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="dark">
 <script src="site_libs/quarto-contrib/glightbox/glightbox.min.js"></script>
 <link href="site_libs/quarto-contrib/glightbox/glightbox.min.css" rel="stylesheet">
 <link href="site_libs/quarto-contrib/glightbox/lightbox.css" rel="stylesheet">
@@ -204,9 +207,10 @@ div.csl-indent {
 <div class="quarto-title-meta">
 
     <div>
-    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-heading">Authors</div>
     <div class="quarto-title-meta-contents">
              <p>Jonathan Wilson </p>
+             <p>Ryan Sollom </p>
           </div>
   </div>
     
@@ -239,8 +243,10 @@ div.csl-indent {
 </div>
 <section id="introduction" class="level1" data-number="1">
 <h1 data-number="1"><span class="header-section-number">1</span> Introduction</h1>
-<p>Flight delays are among the most costly and disruptive failures in the U.S. National Airspace System (NAS), and they rarely occur in isolation. A single late arrival propagates downstream through the same aircraft’s rotation and through shared airport departure and arrival queues, so a local disturbance becomes a network-wide disruption. Existing airline and airport tools remain largely retrospective or single-source, reporting delays after they occur rather than anticipating them from the live state of the airspace.</p>
-<p><strong>Scope.</strong> AeroFlux Stage 2 builds a <em>scalable, modular, configurable, portable, and decoupled</em> big-data platform that ingests, fuses, processes, and analyzes aviation and weather data in real time. The primary use case is flight-delay prediction; the same architecture is designed to support congestion analysis, delay-propagation modeling, operational monitoring, decision support, and agentic AI. <a href="https://jonathanwilsonami.github.io/OR568_ML_Project/">Stage 1</a> established a historical machine-learning pipeline and an interactive prototype <span class="citation" data-cites="wilson2026flightdelay">(<a href="#ref-wilson2026flightdelay" role="doc-biblioref">Wilson et al., 2026</a>)</span>; Stage 2 adds the live data platform, a baseline-versus-advanced model comparison, and an explainable analyst agent.</p>
+<p>Flight delays are among the most costly and disruptive failures in the U.S. National Airspace System (NAS), and they rarely occur in isolation. A single late arrival propagates downstream through the same aircraft’s rotation and through shared airport departure and arrival queues, so a local disturbance becomes a network-wide disruption.</p>
+<p>Although airlines, airports, and air traffic authorities increasingly use real-time and predictive decision-support systems, these capabilities are often specialized around particular organizations, operational domains, or stages of flight. For example, the FAA’s Traffic Flow Management System supports demand-and-capacity management across the National Airspace System, while Terminal Flight Data Manager integrates surface and national traffic-management data to improve airport operations <span class="citation" data-cites="faa_nextgen_2024 faa_tfdm_2020">(<a href="#ref-faa_tfdm_2020" role="doc-biblioref">Federal Aviation Administration, 2020</a>, <a href="#ref-faa_nextgen_2024" role="doc-biblioref">2024b</a>)</span>. Commercial platforms such as Sabre Mosaic support airline disruption recovery, and Assaia ApronAI uses computer vision and machine learning to monitor aircraft turnarounds and predict departure readiness <span class="citation" data-cites="sabre_disruption_management assaia_apronai">(<a href="#ref-assaia_apronai" role="doc-biblioref">Assaia International AG, n.d.</a>; <a href="#ref-sabre_disruption_management" role="doc-biblioref">Sabre Corporation, n.d.</a>)</span>. Opportunities therefore remain for integrated research platforms that fuse multiple live aviation data streams, model delay propagation across the broader flight network, and support forecasting, simulation, data science, and AI-assisted analysis.</p>
+<p><strong>Scope</strong>. The long-term vision for AeroFlux is ambitious and continues to evolve. Stage 2 therefore focuses on building a scalable, modular, configurable, portable, and decoupled big-data platform that can ingest, fuse, process, and analyze aviation and weather data in real time. This platform is intended to establish the technical foundation for future AeroFlux capabilities.</p>
+<p>Flight-delay prediction serves as the primary use case, but the architecture is designed to support additional applications, including congestion analysis, delay-propagation modeling, operational monitoring, decision support, and agentic AI. Stage 1 established a historical machine-learning pipeline and interactive prototype <span class="citation" data-cites="wilson2026flightdelay">(<a href="#ref-wilson2026flightdelay" role="doc-biblioref">Wilson et al., 2026</a>)</span>. Stage 2 extends that work by introducing a live data platform, comparing baseline and advanced predictive models, and developing an explainable analyst agent as an initial prototype.</p>
 <p><strong>Technical challenges.</strong> Building this platform requires solving several non-trivial problems:</p>
 <ol type="1">
 <li>Ingesting heterogeneous, error-prone streaming sources (FAA SWIM XML, ADS-B, weather) without data loss;</li>
@@ -253,9 +259,10 @@ div.csl-indent {
 </section>
 <section id="related-work" class="level1" data-number="2">
 <h1 data-number="2"><span class="header-section-number">2</span> Related Work</h1>
-<p><strong>Machine-learning delay prediction.</strong> Most prior work frames delay prediction as supervised classification or regression over historical records. The review by <span class="citation" data-cites="sternberg2017review">Sternberg et al. (<a href="#ref-sternberg2017review" role="doc-biblioref">2017</a>)</span> describes the major approaches used for flight-delay prediction, while more recent work continues to evaluate machine-learning algorithms and class-imbalance handling <span class="citation" data-cites="albassam2025flight">(<a href="#ref-albassam2025flight" role="doc-biblioref">AlBassam &amp; AlShahrani, 2025</a>)</span>. These approaches can achieve strong accuracy on curated historical data, but they are often retrospective, single-source, and treat flights as independent observations, which limits their ability to represent the network coupling that drives real-world disruptions.</p>
+<p><strong>Machine-learning delay prediction.</strong> Prior work frames delay prediction as supervised classification or regression over historical records. The review by <span class="citation" data-cites="sternberg2017review">Sternberg et al. (<a href="#ref-sternberg2017review" role="doc-biblioref">2017</a>)</span> describes the major approaches used for flight-delay prediction, while more recent work continues to evaluate machine-learning algorithms and class-imbalance handling <span class="citation" data-cites="albassam2025flight">(<a href="#ref-albassam2025flight" role="doc-biblioref">AlBassam &amp; AlShahrani, 2025</a>)</span>. These approaches can achieve strong predictive performance on curated historical datasets. However, when used in isolation, they may remain largely retrospective, rely on a limited set of data sources, and model flights as independent observations. These assumptions can restrict their ability to capture the temporal, spatial, and operational dependencies through which delays propagate across the aviation network.</p>
 <p><strong>Delay-propagation modeling.</strong> A separate literature models how delays ripple through airline schedules. <span class="citation" data-cites="beatty1999preliminary">Beatty et al. (<a href="#ref-beatty1999preliminary" role="doc-biblioref">1999</a>)</span> introduced an early method for evaluating delay propagation through an airline schedule, <span class="citation" data-cites="wong2012survival">Wong &amp; Tsai (<a href="#ref-wong2012survival" role="doc-biblioref">2012</a>)</span> applied a survival model, and <span class="citation" data-cites="kafle2016propagation">Kafle &amp; Zou (<a href="#ref-kafle2016propagation" role="doc-biblioref">2016</a>)</span> proposed an analytical-econometric approach. These methods capture important propagation mechanisms but are generally offline and disconnected from real-time streaming prediction. <span class="citation" data-cites="belcastro2016flight">Belcastro et al. (<a href="#ref-belcastro2016flight" role="doc-biblioref">2016</a>)</span> demonstrated scalable data mining for flight- delay prediction, establishing the value of big-data tooling while leaving room for tighter integration with real-time data fusion.</p>
-<p><strong>Operational data fusion.</strong> The state of the art in operational systems includes NASA’s Airspace Technology Demonstration 2 (ATD-2) <em>Fuser</em>, which fuses multiple aviation data sources into a unified flight record <span class="citation" data-cites="nasa2021atd2fuser">(<a href="#ref-nasa2021atd2fuser" role="doc-biblioref">National Aeronautics and Space Administration, 2021</a>)</span>. Its strength is production-grade fused operational data; its limitation for this project is that it is not designed as a lightweight, open, extensible ML/AI experimentation platform.</p>
+<p><strong>Operational data fusion.</strong> The state of the art in operational systems includes NASA’s Airspace Technology Demonstration 2 (ATD-2) <em>Fuser</em>, which fuses multiple aviation data sources into a unified flight record <span class="citation" data-cites="nasa2021atd2fuser">(<a href="#ref-nasa2021atd2fuser" role="doc-biblioref">National Aeronautics and Space Administration, 2021</a>)</span>. Its strength is production-grade fused operational data; its limitation for this project is that it is not designed as a lightweight, open, extensible ML/AI experimentation platform. This project actually leverages some of the high level concepts used in ATD-2 to create our own fuser.</p>
+<p><strong>Emerging aviation intelligence systems.</strong> Recent operational systems show that the field is moving beyond static delay prediction toward real-time prediction, simulation, and decision support. FlightAware Foresight represents production ML-driven predictive flight tracking, including arrival-time, taxi-out, and runway predictions <span class="citation" data-cites="flightawareForesight">(<a href="#ref-flightawareForesight" role="doc-biblioref">FlightAware, {n.d.}</a>)</span>. NASA’s NAS Digital Twin and Project Bluebird extend this direction toward replayable and probabilistic simulation environments for live or historical airspace operations and AI-agent evaluation <span class="citation" data-cites="lauderdale2024nasDigitalTwin pepper2026probabilisticTwin">(<a href="#ref-lauderdale2024nasDigitalTwin" role="doc-biblioref">Lauderdale et al., 2024</a>; <a href="#ref-pepper2026probabilisticTwin" role="doc-biblioref">Pepper et al., 2026</a>)</span>. Commercial platforms such as Airspace Intelligence PRESCIENCE, Lufthansa Systems NetLine/Ops++ aiOCC, and Amadeus Flight Operations Control show the market moving toward 4D operating-domain twins, AI-assisted operations control, disruption recovery, and resource-aware decision support <span class="citation" data-cites="airspaceIntelligencePrescience lufthansa2025aiocc amadeusFlightOps">(<a href="#ref-airspaceIntelligencePrescience" role="doc-biblioref">Airspace Intelligence, {n.d.}</a>; <a href="#ref-amadeusFlightOps" role="doc-biblioref">Amadeus, {n.d.}</a>; <a href="#ref-lufthansa2025aiocc" role="doc-biblioref">Lufthansa Systems, 2025</a>)</span>. Recent prototypes such as FlightSense further combine rotation-chain features, real-time MLOps, and conversational/agentic interfaces for delay prediction <span class="citation" data-cites="shelke2026flightsense">(<a href="#ref-shelke2026flightsense" role="doc-biblioref">Shelke et al., 2026</a>)</span>, while the FAA AI safety roadmap highlights the need for assurance, incremental deployment, and aviation-specific safety methods when adding AI to operational contexts <span class="citation" data-cites="faa2024airoadmap">(<a href="#ref-faa2024airoadmap" role="doc-biblioref">Federal Aviation Administration, 2024a</a>)</span>. Together, these efforts motivate AeroFlux as a lightweight, SWIM-native experimentation platform that connects real-time data fusion, propagation-aware ML, replay, and explainable/agentic analysis rather than treating delay prediction as a standalone model.</p>
 <p><strong>Relevance of this approach.</strong> AeroFlux Stage 2 bridges these strands. It couples lightweight, Fuser-inspired real-time fusion and entity resolution with propagation-aware feature engineering and an explainable retrieval-augmented agent—integrating capabilities that prior work often treats separately.</p>
 </section>
 <section id="objectives" class="level1" data-number="3">
@@ -265,8 +272,8 @@ div.csl-indent {
 <li>Deliver a portable, decoupled platform that runs unchanged on a laptop, school hardware, or any cloud VM (container-first, cloud-agnostic).</li>
 <li>Compare a baseline model against an advanced, propagation- and weather-aware model for arrival-delay prediction.</li>
 <li>Evaluate both <strong>predictive</strong> performance and <strong>system</strong> performance.</li>
-<li>Provide a starter <em>Aviation Operations Analyst Agent</em> that retrieves evidence, explains model predictions, and recommends analytical next steps—without making operational decisions.</li>
-<li>Achieve a demonstrable minimum implementation within approximately one month.</li>
+<li>Develop and evaluate a starter Aviation Operations Analyst that uses retrieval, model invocation, explainability, and structured tool calling to produce evidence-grounded disruption-investigation briefs without making operational decisions.</li>
+<li>Define stable tool interfaces that can later support knowledge graphs, operational-event replay, simulation, MCP integration, and specialized agent workflows without requiring replacement of the underlying data platform.</li>
 </ol>
 </section>
 <section id="datasets" class="level1" data-number="4">
@@ -343,12 +350,12 @@ Table&nbsp;1: AeroFlux Stage 2 data sources, retention policies, and estimated s
 Listing&nbsp;1: Raw SWIM TFMS flight message (abridged).
 </figcaption>
 <div aria-describedby="lst-swim-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode xml code-with-copy"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>&lt;<span class="kw">fdm:fltdMessage</span><span class="ot"> acid=</span><span class="st">"AAL2033"</span><span class="ot"> airline=</span><span class="st">"AAL"</span><span class="ot"> arrArpt=</span><span class="st">"KLGA"</span><span class="ot"> depArpt=</span><span class="st">"KCLT"</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ot">   flightRef=</span><span class="st">"150976233"</span><span class="ot"> msgType=</span><span class="st">"FlightModify"</span> <span class="er">...</span>&gt;</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode xml code-with-copy"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>&lt;<span class="kw">fdm:fltdMessage</span> <span class="ot">acid=</span><span class="st">"AAL2033"</span> <span class="ot">airline=</span><span class="st">"AAL"</span> <span class="ot">arrArpt=</span><span class="st">"KLGA"</span> <span class="ot">depArpt=</span><span class="st">"KCLT"</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>   <span class="ot">flightRef=</span><span class="st">"150976233"</span> <span class="ot">msgType=</span><span class="st">"FlightModify"</span> <span class="er">...</span>&gt;</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  &lt;<span class="kw">nxcm:flightStatus</span>&gt;PLANNED&lt;/<span class="kw">nxcm:flightStatus</span>&gt;</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  &lt;<span class="kw">nxcm:aircraftModel</span>&gt;A320&lt;/<span class="kw">nxcm:aircraftModel</span>&gt;</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  &lt;<span class="kw">nxcm:flightTimeData</span><span class="ot"> airlineOutTime=</span><span class="st">"2026-07-04T15:39:00Z"</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="ot">                       airlineInTime=</span><span class="st">"2026-07-04T17:35:00Z"</span>/&gt;</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  &lt;<span class="kw">nxcm:flightTimeData</span> <span class="ot">airlineOutTime=</span><span class="st">"2026-07-04T15:39:00Z"</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>                       <span class="ot">airlineInTime=</span><span class="st">"2026-07-04T17:35:00Z"</span>/&gt;</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>&lt;/<span class="kw">fdm:fltdMessage</span>&gt;</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </figure>
@@ -371,73 +378,30 @@ Listing&nbsp;2: Fused, schema-validated canonical flight-instance record.
 </section>
 <section id="methodology-and-proposed-solution" class="level1" data-number="5">
 <h1 data-number="5"><span class="header-section-number">5</span> Methodology and Proposed Solution</h1>
-<p><strong>Pipeline.</strong> Ingestion services publish each source to a dedicated Kafka topic (48-hour retention). Apache Spark Structured Streaming consumes these topics and applies the existing <code>aeroflux_parser</code> library to parse, normalize, validate against a strict schema contract, and fuse messages into per-flight records via GUFI-keyed, source-priority mediation, with <code>flight_ref</code> used only as a reconciliation bridge and ADS-B used to resolve the tail. Fused records land in MongoDB (silver, 48-hour TTL) and, together with BTS backfill, in a MinIO data lake (gold parquet). The full architecture is shown in <a href="#fig-aeroflux2-arch" class="quarto-xref">Figure&nbsp;1</a>.</p>
+<p><strong>Architecture.</strong> AeroFlux Stage 2 is a streaming lakehouse: heterogeneous aviation and weather sources are ingested continuously, processed by a distributed compute engine, and persisted across bronze → silver → gold tiers. Every component runs as a container, so the platform deploys unchanged on a laptop, university hardware, or a single cloud VM, with managed AWS services as an optional scale path rather than a requirement. The full architecture is shown in <a href="#fig-aeroflux2-arch" class="quarto-xref">Figure&nbsp;1</a>.</p>
 <div id="fig-aeroflux2-arch" class="lightbox quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-aeroflux2-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<a href="./images/design/aeroflux2-arch.png" class="lightbox" data-gallery="quarto-lightbox-gallery-1" title="Figure&nbsp;1: AeroFlux Stage 2 system architecture."><img src="./images/design/aeroflux2-arch.png" class="img-fluid figure-img"></a>
+<a href="images/design/aeroflux2-arch-v2.svg" class="lightbox" data-gallery="quarto-lightbox-gallery-1" title="Figure&nbsp;1: AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud."><img src="images/design/aeroflux2-arch-v2.svg" class="img-fluid figure-img"></a>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-aeroflux2-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;1: AeroFlux Stage 2 system architecture.
+Figure&nbsp;1: AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud.
 </figcaption>
 </figure>
 </div>
-<p><strong>Baseline versus advanced models.</strong> The baseline is a logistic-regression classifier on flight-level features (carrier, origin, destination, scheduled times). The advanced model is a gradient-boosted tree using XGBoost <span class="citation" data-cites="chen2016xgboost">(<a href="#ref-chen2016xgboost" role="doc-biblioref">Chen &amp; Guestrin, 2016</a>)</span> and is enriched with <em>propagation</em> features (previous-leg arrival delay and scheduled turnaround buffer), weather features, and rolling airport demand. This design directly operationalizes findings from the delay- propagation literature <span class="citation" data-cites="beatty1999preliminary kafle2016propagation">(<a href="#ref-beatty1999preliminary" role="doc-biblioref">Beatty et al., 1999</a>; <a href="#ref-kafle2016propagation" role="doc-biblioref">Kafle &amp; Zou, 2016</a>)</span>. Both models target a 15-minute arrival-delay classification, with class imbalance addressed through resampling, a concern emphasized in recent delay-prediction research <span class="citation" data-cites="albassam2025flight">(<a href="#ref-albassam2025flight" role="doc-biblioref">AlBassam &amp; AlShahrani, 2025</a>)</span>. Models are tracked in MLflow and explained with SHAP <span class="citation" data-cites="lundberg2017shap">(<a href="#ref-lundberg2017shap" role="doc-biblioref">Lundberg &amp; Lee, 2017</a>)</span>, whose outputs feed the agent.</p>
-<p><strong>Evaluation.</strong> Both predictive and system performance are evaluated (<a href="#tbl-models" class="quarto-xref">Table&nbsp;2</a>). Predictive metrics include ROC-AUC, PR-AUC, F1, and Brier score and calibration, using point-in-time features to prevent leakage. System metrics include end-to-end latency, sustained message throughput, fusion completeness (fields populated per flight), and resource footprint.</p>
-<div id="tbl-models" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-models-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;2: Baseline-versus-advanced comparison and evaluation plan.
-</figcaption>
-<div aria-describedby="tbl-models-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Dimension</th>
-<th>Baseline</th>
-<th>Advanced</th>
-<th>Metrics</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Model</td>
-<td>Logistic Regression</td>
-<td>XGBoost + propagation + weather</td>
-<td>ROC-AUC, PR-AUC, F1, Brier</td>
-</tr>
-<tr class="even">
-<td>Features</td>
-<td>Flight-level</td>
-<td>+ propagation, weather, demand</td>
-<td>Feature importance (SHAP)</td>
-</tr>
-<tr class="odd">
-<td>System</td>
-<td>—</td>
-<td>Streaming pipeline</td>
-<td>Latency, throughput, completeness</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
-<p><strong>Agentic AI and LLM approach.</strong> The starter <em>Aviation Operations Analyst Agent</em> answers natural-language questions (for example, “Why is this flight likely delayed?”) by combining retrieval-augmented generation <span class="citation" data-cites="lewis2020rag">(<a href="#ref-lewis2020rag" role="doc-biblioref">Lewis et al., 2020</a>)</span> over the aviation-documentation corpus (embeddings in pgvector) with tool calls that query the fused databases, invoke the delay model, and return SHAP explanations. The agent retrieves evidence, explains predictions, and recommends next steps; it does <strong>not</strong> execute operational aviation decisions.</p>
+<p><strong>Ingestion and streaming.</strong> Dedicated services publish each source—SWIM flight messages, ADS-B, and weather—to a dedicated Apache Kafka topic with 48-hour retention, decoupling producers from consumers and providing a replayable event history. Apache Spark Structured Streaming consumes these topics as the platform’s primary big-data compute engine, applying the <code>aeroflux_parser</code> library to validate each message against a strict schema contract and fuse messages into per-flight canonical records—keyed on the stable GUFI, with ADS-B used to resolve the aircraft tail that SWIM omits.</p>
+<p><strong>Storage tiers and retention.</strong> Processing follows a bronze → silver → gold progression. Raw and fused per-flight state are held hot in PostgreSQL on a rolling 48-hour window; current per-flight predictions are served from a NoSQL store (Amazon DynamoDB in the cloud); and canonical and gold feature/label tables are written as partitioned Parquet to a MinIO / Amazon S3 data lake, queryable in place through Amazon Athena over an AWS Glue catalog. Short retention keeps the streaming footprint small and low-cost, while the lake retains durable history for training and replay. Because storage backends sit behind configuration, the local stack (PostgreSQL, MinIO) swaps to managed cloud services (RDS, S3) with no code change.</p>
+<p><strong>Machine learning.</strong> The same Spark engine runs feature engineering and XGBoost inference via <code>foreachBatch</code>, comparing a logistic-regression baseline against an advanced gradient-boosted model enriched with propagation, weather, and rolling airport-demand features <span class="citation" data-cites="chen2016xgboost beatty1999preliminary kafle2016propagation">(<a href="#ref-beatty1999preliminary" role="doc-biblioref">Beatty et al., 1999</a>; <a href="#ref-chen2016xgboost" role="doc-biblioref">Chen &amp; Guestrin, 2016</a>; <a href="#ref-kafle2016propagation" role="doc-biblioref">Kafle &amp; Zou, 2016</a>)</span>. Feature engineering is expressed once in a source-agnostic core, so historical (BTS) training and live serving compute identical features by construction; that core runs on Polars locally for development and in Spark at scale. Both models target a 15-minute arrival-delay classification, are tracked in MLflow, and are explained with SHAP <span class="citation" data-cites="lundberg2017shap">(<a href="#ref-lundberg2017shap" role="doc-biblioref">Lundberg &amp; Lee, 2017</a>)</span>.</p>
+<p><strong>AI orchestration prototype.</strong> A lightweight <em>Aviation Operations Analyst</em> uses retrieval-augmented generation <span class="citation" data-cites="lewis2020rag">(<a href="#ref-lewis2020rag" role="doc-biblioref">Lewis et al., 2020</a>)</span> and a constrained LangGraph workflow over a curated aviation-document corpus to produce cited, evidence- grounded briefs; it does not touch live streaming data or make operational decisions, and is evaluated on a small set of reviewed questions for groundedness, citation accuracy, and appropriate tool use. As an optional stretch goal, a read-only Model Context Protocol (MCP) server may expose these tools through a standardized interface.</p>
+<p><strong>Evaluation.</strong> Both predictive and system performance are evaluated.</p>
 </section>
 <section id="development-environment" class="level1" data-number="6">
 <h1 data-number="6"><span class="header-section-number">6</span> Development Environment</h1>
-<p>The stack (<a href="#tbl-stack" class="quarto-xref">Table&nbsp;3</a>) is entirely open-source and container-first. Every component runs as a Docker Compose service, so the platform deploys unchanged on a laptop, university hardware, or a single cloud VM; managed AWS services (MSK, EMR, SageMaker) are an optional scale path rather than a requirement. MinIO provides an S3-compatible object store that swaps to real S3 with no code change. Short retention keeps storage and cost minimal (target budget: a modest VM plus a few dollars of LLM API usage).</p>
+<p>The stack (<a href="#tbl-stack" class="quarto-xref">Table&nbsp;2</a>) is entirely open-source and container-first. Every component runs as a Docker Compose service, so the platform deploys unchanged on a laptop, university hardware, or a single cloud VM; managed AWS services (MSK, EMR, SageMaker) are an optional scale path rather than a requirement. MinIO provides an S3-compatible object store that swaps to real S3 with no code change. Short retention keeps storage and cost minimal (target budget: a modest VM plus a few dollars of LLM API usage).</p>
 <div id="tbl-stack" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-stack-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;3: Development environment and technology stack.
+Table&nbsp;2: Development environment and technology stack.
 </figcaption>
 <div aria-describedby="tbl-stack-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -462,27 +426,43 @@ Table&nbsp;3: Development environment and technology stack.
 </tr>
 <tr class="odd">
 <td>Storage</td>
-<td>MongoDB, PostgreSQL + pgvector, MinIO (S3-compatible)</td>
+<td>MongoDB, PostgreSQL + pgvector, MinIO / Amazon S3</td>
 </tr>
 <tr class="even">
+<td>Historical replay</td>
+<td>Kafka offsets and immutable Parquet event history in MinIO / S3</td>
+</tr>
+<tr class="odd">
 <td>ML</td>
-<td>scikit-learn, XGBoost <span class="citation" data-cites="chen2016xgboost">(<a href="#ref-chen2016xgboost" role="doc-biblioref">Chen &amp; Guestrin, 2016</a>)</span>, MLflow, SHAP <span class="citation" data-cites="lundberg2017shap">(<a href="#ref-lundberg2017shap" role="doc-biblioref">Lundberg &amp; Lee, 2017</a>)</span></td>
+<td>scikit-learn, XGBoost, Spark ML, MLflow, SHAP</td>
+</tr>
+<tr class="even">
+<td>AI orchestration</td>
+<td>LangGraph constrained workflow with read-only tool calling</td>
 </tr>
 <tr class="odd">
 <td>LLM / RAG</td>
-<td>Claude API, pgvector, tool-calling agent loop</td>
+<td>Claude API or Amazon Bedrock; pgvector semantic retrieval</td>
 </tr>
 <tr class="even">
+<td>Agent tools</td>
+<td>Document search, operational-data query, model inference, SHAP explanation, event reconstruction</td>
+</tr>
+<tr class="odd">
 <td>Serving / UI</td>
 <td>FastAPI, Dash / Plotly</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Orchestration</td>
-<td>Prefect</td>
+<td>Prefect, Airflow or other</td>
+</tr>
+<tr class="odd">
+<td>Interoperability</td>
+<td>Optional read-only AeroFlux MCP server</td>
 </tr>
 <tr class="even">
 <td>Packaging / Platform</td>
-<td>Docker + Docker Compose; optional AWS EC2 + S3</td>
+<td>Docker Compose; optional AWS EC2, S3, and EMR Serverless</td>
 </tr>
 </tbody>
 </table>
@@ -492,11 +472,11 @@ Table&nbsp;3: Development environment and technology stack.
 </section>
 <section id="project-tasks-and-timeline" class="level1" data-number="7">
 <h1 data-number="7"><span class="header-section-number">7</span> Project Tasks and Timeline</h1>
-<p>The minimum implementation is scoped to approximately one month (<a href="#tbl-timeline" class="quarto-xref">Table&nbsp;4</a>), building on Stage 1’s completed ingestion, fusion, entity-resolution, schema contract, and baseline model. Future capabilities—graph analytics, simulation, digital twin, and a multi-agent system—are explicitly out of scope for this timeline.</p>
+<p>The minimum implementation is scoped to approximately one month (<a href="#tbl-timeline" class="quarto-xref">Table&nbsp;3</a>), building on Stage 1’s completed ingestion, fusion, entity-resolution, schema contract, and baseline model. Future capabilities—graph analytics, simulation, digital twin, and a multi-agent system—are explicitly out of scope for this timeline.</p>
 <div id="tbl-timeline" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-timeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;4: One-month project timeline and effort allocation.
+Table&nbsp;3: One-month project timeline and effort allocation.
 </figcaption>
 <div aria-describedby="tbl-timeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
@@ -515,22 +495,22 @@ Table&nbsp;4: One-month project timeline and effort allocation.
 <tbody>
 <tr class="odd">
 <td>1</td>
-<td>Add weather source; Spark Structured Streaming pipeline; MongoDB silver store + TTL</td>
+<td>Complete streaming and weather integration; prepare MongoDB records, documentation corpus, and two or three historical investigation scenarios</td>
 <td>20</td>
 </tr>
 <tr class="even">
 <td>2</td>
-<td>Feature engineering (propagation, demand, weather); gold dataset; baseline vs.&nbsp;advanced training; MLflow; evaluation</td>
+<td>Feature engineering; baseline and advanced model evaluation; MLflow tracking; SHAP explanation service</td>
 <td>22</td>
 </tr>
 <tr class="odd">
 <td>3</td>
-<td>FastAPI inference API + SHAP; pgvector RAG; analyst agent + tools</td>
+<td>Build pgvector retrieval pipeline and LangGraph analyst workflow; implement document-search, flight-query, prediction, explanation, and event-reconstruction tools</td>
 <td>22</td>
 </tr>
 <tr class="even">
 <td>4</td>
-<td>Integration, UI wiring, system + predictive evaluation, demo, write-up; buffer</td>
+<td>Integrate the analyst UI; create agent evaluation cases; measure groundedness, tool selection, latency, and predictive/system performance; complete demonstration and write-up</td>
 <td>18</td>
 </tr>
 </tbody>
@@ -542,8 +522,17 @@ Table&nbsp;4: One-month project timeline and effort allocation.
 <section id="references" class="level1 unnumbered">
 <h1 class="unnumbered">References</h1>
 <div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" data-line-spacing="2" role="list">
+<div id="ref-airspaceIntelligencePrescience" class="csl-entry" role="listitem">
+Airspace Intelligence. ({n.d.}). <em><span>PRESCIENCE</span> platform</em>. <a href="https://www.airspace-intelligence.com/platform">https://www.airspace-intelligence.com/platform</a>
+</div>
 <div id="ref-albassam2025flight" class="csl-entry" role="listitem">
 AlBassam, S. A. A., &amp; AlShahrani, D. N. (2025). Flight delay prediction: Evaluating machine learning algorithms for enhanced accuracy. <em>PLOS ONE</em>, <em>20</em>(12), e0335141.
+</div>
+<div id="ref-amadeusFlightOps" class="csl-entry" role="listitem">
+Amadeus. ({n.d.}). <em>Flight operations control</em>. <a href="https://amadeus.com/en/airlines/products/flight-operations-control">https://amadeus.com/en/airlines/products/flight-operations-control</a>
+</div>
+<div id="ref-assaia_apronai" class="csl-entry" role="listitem">
+Assaia International AG. (n.d.). <em><span>ApronAI</span>: Real-time visibility and predictive alerting for turnaround operations</em>. <a href="https://www.assaia.com/solutions/apron-ai">https://www.assaia.com/solutions/apron-ai</a>
 </div>
 <div id="ref-beatty1999preliminary" class="csl-entry" role="listitem">
 Beatty, R., Hsu, R., Berry, L., &amp; Rome, J. (1999). Preliminary evaluation of flight delay propagation through an airline schedule. <em>Air Traffic Control Quarterly</em>, <em>7</em>(4), 259–270.
@@ -554,11 +543,29 @@ Belcastro, L., Marozzo, F., Talia, D., &amp; Trunfio, P. (2016). Using scalable 
 <div id="ref-chen2016xgboost" class="csl-entry" role="listitem">
 Chen, T., &amp; Guestrin, C. (2016). <span>XGBoost</span>: A scalable tree boosting system. <em>Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining</em>, 785–794.
 </div>
+<div id="ref-faa_tfdm_2020" class="csl-entry" role="listitem">
+Federal Aviation Administration. (2020). <em><span>TFDM</span> capabilities</em>. U.S. Department of Transportation. <a href="https://www.faa.gov/air_traffic/technology/tfdm/capabilities">https://www.faa.gov/air_traffic/technology/tfdm/capabilities</a>
+</div>
+<div id="ref-faa2024airoadmap" class="csl-entry" role="listitem">
+Federal Aviation Administration. (2024a). <em>Roadmap for artificial intelligence safety assurance</em>. Federal Aviation Administration. <a href="https://www.faa.gov/media/82891">https://www.faa.gov/media/82891</a>
+</div>
+<div id="ref-faa_nextgen_2024" class="csl-entry" role="listitem">
+Federal Aviation Administration. (2024b). <em>NextGen</em>. U.S. Department of Transportation. <a href="https://www.faa.gov/newsroom/nextgen">https://www.faa.gov/newsroom/nextgen</a>
+</div>
+<div id="ref-flightawareForesight" class="csl-entry" role="listitem">
+FlightAware. ({n.d.}). <em>FlightAware foresight predictive flight tracking</em>. <a href="https://uk.flightaware.com/commercial/foresight/">https://uk.flightaware.com/commercial/foresight/</a>
+</div>
 <div id="ref-kafle2016propagation" class="csl-entry" role="listitem">
 Kafle, N., &amp; Zou, B. (2016). Modeling flight delay propagation: A new analytical-econometric approach. <em>Transportation Research Part B: Methodological</em>, <em>93</em>, 520–542.
 </div>
+<div id="ref-lauderdale2024nasDigitalTwin" class="csl-entry" role="listitem">
+Lauderdale, T. A., Windhorst, R. D., Coppenbarger, R. A., Thipphavong, D. P., &amp; Erzberger, H. (2024). Overview of the national airspace system <span>(NAS)</span> digital twin simulation environment. <em>AIAA AVIATION Forum and ASCEND 2024</em>. <a href="https://doi.org/10.2514/6.2024-4011">https://doi.org/10.2514/6.2024-4011</a>
+</div>
 <div id="ref-lewis2020rag" class="csl-entry" role="listitem">
 Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., Küttler, H., Lewis, M., Yih, W., Rocktäschel, T., Riedel, S., &amp; Kiela, D. (2020). Retrieval-augmented generation for knowledge-intensive <span>NLP</span> tasks. <em>Advances in Neural Information Processing Systems 33</em>, 9459–9474.
+</div>
+<div id="ref-lufthansa2025aiocc" class="csl-entry" role="listitem">
+Lufthansa Systems. (2025). <em><span class="nocase">NetLine/Ops++ aiOCC</span></em>. <a href="https://cdn.lhsystems.com/2025-02/2025_02_Product_information_NetLine_Ops_%2B%2B_aiOCC.pdf">https://cdn.lhsystems.com/2025-02/2025_02_Product_information_NetLine_Ops_%2B%2B_aiOCC.pdf</a>
 </div>
 <div id="ref-lundberg2017shap" class="csl-entry" role="listitem">
 Lundberg, S. M., &amp; Lee, S.-I. (2017). A unified approach to interpreting model predictions. <em>Advances in Neural Information Processing Systems 30</em>, 4765–4774.
@@ -566,8 +573,17 @@ Lundberg, S. M., &amp; Lee, S.-I. (2017). A unified approach to interpreting mod
 <div id="ref-nasa2021atd2fuser" class="csl-entry" role="listitem">
 National Aeronautics and Space Administration. (2021). <em>Airspace technology demonstration 2 (<span>ATD-2</span>) fuser</em>. Computer software; GitHub. <a href="https://github.com/nasa/atd2-fuser">https://github.com/nasa/atd2-fuser</a>
 </div>
+<div id="ref-pepper2026probabilisticTwin" class="csl-entry" role="listitem">
+Pepper, N., Keane, A., Hodgkin, A., Gould, D., Henderson, E., Lauritsen, L., Vlahos, C., De Ath, G., Everson, R., Cannon, R., Sierra Castro, A., Korna, J., Carvell, B., &amp; Thomas, M. (2026). A probabilistic digital twin of <span>UK</span> en route airspace for training and evaluating <span>AI</span> agents for air traffic control. <em>AIAA SciTech Forum</em>. <a href="https://doi.org/10.2514/6.2026-1794">https://doi.org/10.2514/6.2026-1794</a>
+</div>
+<div id="ref-sabre_disruption_management" class="csl-entry" role="listitem">
+Sabre Corporation. (n.d.). <em>Airline disruption management software</em>. <a href="https://www.sabre.com/airline-mosaic/service-suite/disruption-management/">https://www.sabre.com/airline-mosaic/service-suite/disruption-management/</a>
+</div>
 <div id="ref-schaefer2014opensky" class="csl-entry" role="listitem">
 Schäfer, M., Strohmeier, M., Lenders, V., Martinovic, I., &amp; Wilhelm, M. (2014). Bringing up <span>OpenSky</span>: A large-scale <span>ADS-B</span> sensor network for research. <em>Proceedings of the 13th International Symposium on Information Processing in Sensor Networks</em>, 83–94.
+</div>
+<div id="ref-shelke2026flightsense" class="csl-entry" role="listitem">
+Shelke, A. J., Shelke, R. J., Kamerkar, Y. M., &amp; Hazarani, N. P. (2026). <em><span>FlightSense</span>: An end-to-end <span>MLOps</span> platform for real-time flight delay prediction via rotation-chain propagation features and agentic conversational <span>AI</span></em>. <a href="https://doi.org/10.48550/arXiv.2605.07364">https://doi.org/10.48550/arXiv.2605.07364</a>
 </div>
 <div id="ref-sternberg2017review" class="csl-entry" role="listitem">
 Sternberg, A., Soares, J., Carvalho, D., &amp; Ogasawara, E. (2017). <em>A review on flight delay prediction</em>. <a href="https://arxiv.org/abs/1703.06118">https://arxiv.org/abs/1703.06118</a>
