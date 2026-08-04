@@ -104,10 +104,32 @@ def _read_first_csv(zip_bytes: bytes) -> pl.DataFrame:
     return df.select([c for c in df.columns if c != ""])   # drop trailing empty col
 
 
+def _find_local_csv(cache_dir: str, year: int, month: int) -> Path | None:
+    """Find an already-extracted BTS CSV for this month, tolerating the
+    common TranStats layouts (single- or zero-padded month, parenthesised name):
+      <cache>/extracted_YYYY_M/On_Time_..._(1987_present)_YYYY_M.csv
+      <cache>/On_Time_..._YYYY_M.csv
+    """
+    from glob import glob
+    root = Path(cache_dir)
+    pats = [
+        str(root / f"extracted_{year}_{month}" / "*.csv"),
+        str(root / f"extracted_{year}_{month:02d}" / "*.csv"),
+        str(root / f"*_{year}_{month}.csv"),
+        str(root / f"*_{year}_{month:02d}.csv"),
+    ]
+    for pat in pats:
+        hits = sorted(glob(pat))
+        if hits:
+            return Path(hits[0])
+    return None
+
+
 def fetch_bts_month(year: int, month: int, cache_dir: str = "data/bts",
                     force: bool = False) -> pl.DataFrame:
-    """One month of BTS, normalized. Cached as Parquet; re-downloads only with
-    force=True or a cache miss."""
+    """One month of BTS, normalized. Resolution order: Parquet cache ->
+    pre-extracted CSV (your existing layout) -> download. Downloaded/discovered
+    data is cached as Parquet for instant reuse."""
     cache = Path(cache_dir)
     cache.mkdir(parents=True, exist_ok=True)
     cached = cache / f"bts_{year}_{month:02d}.parquet"
@@ -115,9 +137,18 @@ def fetch_bts_month(year: int, month: int, cache_dir: str = "data/bts",
         print(f"  cached BTS {year}-{month:02d} -> {cached}")
         return pl.read_parquet(cached)
 
-    url = f"{_PREZIP}/{_ZIP_TEMPLATE.format(year=year, month=month)}"
-    print(f"  downloading BTS {year}-{month:02d} ...")
-    df = normalize_bts_columns(_read_first_csv(_download_zip(url)))
+    local = None if force else _find_local_csv(cache_dir, year, month)
+    if local is not None:
+        print(f"  using local BTS CSV {year}-{month:02d} -> {local}")
+        raw = pl.read_csv(local, infer_schema_length=10000,
+                          null_values=["", "NA", "NULL", "null"])
+        raw = raw.select([c for c in raw.columns if c != ""])
+        df = normalize_bts_columns(raw)
+    else:
+        url = f"{_PREZIP}/{_ZIP_TEMPLATE.format(year=year, month=month)}"
+        print(f"  downloading BTS {year}-{month:02d} ...")
+        df = normalize_bts_columns(_read_first_csv(_download_zip(url)))
+
     df.write_parquet(cached)
     print(f"  cached {df.height:,} rows -> {cached}")
     return df
