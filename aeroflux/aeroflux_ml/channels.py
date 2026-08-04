@@ -123,8 +123,25 @@ def flow_features(df: pl.DataFrame, cfg: dict) -> pl.DataFrame:
 
 # --- Channel 5: weather (METAR as-of join) ----------------------------------
 
-# Common METAR observation schema the fetchers produce and this channel joins.
-WEATHER_OBS_COLUMNS = ["station", "obs_time", "wind_kt", "vis_mi", "ifr"]
+# Common observation schema the fetchers produce and this channel joins.
+# Superset across sources: METAR gives wind/vis/ifr; NCEI adds temp_c + ceiling_ft.
+WEATHER_OBS_COLUMNS = ["station", "obs_time", "wind_kt", "vis_mi", "ifr",
+                       "temp_c", "ceiling_ft"]
+
+_WX_VARS = ["wind_kt", "vis_mi", "ifr", "temp_c", "ceiling_ft"]
+
+
+def _ensure_obs_schema(obs: pl.DataFrame) -> pl.DataFrame:
+    """Pad an observation frame with any missing wx columns as null, so a source
+    that only carries some variables (e.g. METAR has no temp/ceiling) still joins
+    cleanly against the full schema."""
+    add = []
+    for c in WEATHER_OBS_COLUMNS:
+        if c not in obs.columns:
+            dt = pl.Int8 if c == "ifr" else (pl.Datetime("us") if c == "obs_time"
+                 else pl.Utf8 if c == "station" else pl.Float64)
+            add.append(pl.lit(None, dtype=dt).alias(c))
+    return obs.with_columns(add) if add else obs
 
 
 def _asof_weather(df: pl.DataFrame, obs: pl.DataFrame, time_col: str,
@@ -132,12 +149,10 @@ def _asof_weather(df: pl.DataFrame, obs: pl.DataFrame, time_col: str,
     """Attach the most-recent station observation at or before `time_col`,
     matched by airport. Rows with a null time are excluded and rejoin null."""
     renamed = obs.select(
-        pl.col("station"),
-        pl.col("obs_time"),
-        pl.col("wind_kt").alias(f"{prefix}_wx_wind_kt"),
-        pl.col("vis_mi").alias(f"{prefix}_wx_vis_mi"),
-        pl.col("ifr").alias(f"{prefix}_wx_ifr"),
+        pl.col("station"), pl.col("obs_time"),
+        *[pl.col(v).alias(f"{prefix}_wx_{v}") for v in _WX_VARS],
     ).sort("obs_time")
+    wx_out = [f"{prefix}_wx_{v}" for v in _WX_VARS]
 
     df = df.with_row_index("_wx_row")
     valid = df.filter(pl.col(time_col).is_not_null()).sort(time_col)
@@ -145,32 +160,38 @@ def _asof_weather(df: pl.DataFrame, obs: pl.DataFrame, time_col: str,
         renamed, left_on=time_col, right_on="obs_time",
         by_left=airport_col, by_right="station",
         strategy="backward", tolerance=tolerance,
-    ).select("_wx_row", f"{prefix}_wx_wind_kt", f"{prefix}_wx_vis_mi", f"{prefix}_wx_ifr")
+    ).select("_wx_row", *wx_out)
 
     return df.join(joined, on="_wx_row", how="left").drop("_wx_row")
 
 
-_WX_COLS = ["origin_wx_wind_kt", "origin_wx_vis_mi", "origin_wx_ifr",
-           "dest_wx_wind_kt", "dest_wx_vis_mi", "dest_wx_ifr"]
+_WX_COLS = [f"{side}_wx_{v}" for side in ("origin", "dest") for v in _WX_VARS]
 
 
 @channel("weather")
 def weather_features(df: pl.DataFrame, cfg: dict) -> pl.DataFrame:
-    """Origin/destination METAR features via temporal+geographic as-of join.
+    """Origin/destination weather via temporal+geographic as-of join.
 
     Needs `cfg['weather_obs']`: a frame of observations (WEATHER_OBS_COLUMNS).
-    Without it, emits null columns so the model's feature schema stays stable
-    whether or not weather is wired in — same trick as the other channels."""
+    Source-agnostic — METAR (live) or NCEI global-hourly (training) both work.
+    Without it, emits null columns so the model's feature schema stays stable."""
     obs = cfg.get("weather_obs")
     if obs is None or (hasattr(obs, "height") and obs.height == 0):
-        return df.with_columns([pl.lit(None, dtype=pl.Float64).alias(c)
-                                if not c.endswith("_ifr")
-                                else pl.lit(None, dtype=pl.Int8).alias(c)
+        return df.with_columns([pl.lit(None, dtype=pl.Int8).alias(c) if c.endswith("_ifr")
+                                else pl.lit(None, dtype=pl.Float64).alias(c)
                                 for c in _WX_COLS])
 
+    obs = _ensure_obs_schema(obs)
     tol = f"{int(cfg.get('weather_tolerance_minutes', 120))}m"
-    df = _asof_weather(df, obs, "sched_dep", "origin", "origin", tol)
-    df = _asof_weather(df, obs, "sched_arr", "destination", "dest", tol)
+    # Parity + no leakage: both origin AND destination weather are taken as of the
+    # SCORE TIME (the moment we predict = scheduled departure by default), not at
+    # actual/scheduled ARRIVAL. Destination weather is therefore "current
+    # conditions at the arrival airport when we score" — knowable at train and
+    # serve time alike. Switch via cfg['weather_score_time'] if you predict only
+    # after pushback (e.g. 'sched_dep' -> an actual-departure column).
+    score_time = cfg.get("weather_score_time", "sched_dep")
+    df = _asof_weather(df, obs, score_time, "origin", "origin", tol)
+    df = _asof_weather(df, obs, score_time, "destination", "dest", tol)
     return df
 
 
@@ -184,5 +205,7 @@ CHANNEL_OUTPUTS: dict[str, list[str]] = {
                       "dest_arr_demand", "dest_recent_arr_delay"],
     "flow": ["has_edct", "tmi_on_route", "system_delay_index"],
     "weather": ["origin_wx_wind_kt", "origin_wx_vis_mi", "origin_wx_ifr",
-                "dest_wx_wind_kt", "dest_wx_vis_mi", "dest_wx_ifr"],
+                "origin_wx_temp_c", "origin_wx_ceiling_ft",
+                "dest_wx_wind_kt", "dest_wx_vis_mi", "dest_wx_ifr",
+                "dest_wx_temp_c", "dest_wx_ceiling_ft"],
 }

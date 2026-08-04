@@ -30,7 +30,7 @@ _SILVER_COLS = [
 
 
 def read_silver_postgres(dsn: str, table: str = "public.flight_instance",
-                         limit: int = 20000) -> pl.DataFrame:
+                         limit: int = 2000000) -> pl.DataFrame:
     try:
         import psycopg
         conn = psycopg.connect(dsn)

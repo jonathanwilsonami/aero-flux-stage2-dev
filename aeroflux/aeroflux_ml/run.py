@@ -44,7 +44,7 @@ def main() -> int:
     pg = sub.add_parser("postgres", help="read silver from Postgres flight_instance")
     pg.add_argument("--dsn", required=True)
     pg.add_argument("--table", default="public.flight_instance")
-    pg.add_argument("--limit", type=int, default=20000)
+    pg.add_argument("--limit", type=int, default=2000000)
 
     js = sub.add_parser("jsonl", help="read silver from a dataset.jsonl file")
     js.add_argument("--in", dest="infile", required=True)
@@ -56,6 +56,8 @@ def main() -> int:
         p.add_argument("--state-db", default=None, help="optional sqlite path for predictions")
         p.add_argument("--weather", choices=["live", "off"], default="off",
                        help="fetch live METAR for airports in the data and enable the weather channel")
+        p.add_argument("--weather-hours", type=int, default=24,
+                       help="hours of METAR history to fetch (wider = more of the 48h flight backlog matches)")
         p.add_argument("--show", type=int, default=3, help="sample gold rows to print")
 
     args = ap.parse_args()
@@ -76,9 +78,15 @@ def main() -> int:
                            silver["origin"].drop_nulls().to_list()
                            + silver["destination"].drop_nulls().to_list()})
         print(f"Fetching live METAR for {len(stations)} airport(s)...")
-        obs = fetch_metar_live(stations)
-        cfg.features.channels["weather"] = True
-        context = {"weather_obs": obs}
+        try:
+            obs = fetch_metar_live(stations, hours=args.weather_hours)
+            cfg.features.channels["weather"] = True
+            context = {"weather_obs": obs}
+            print(f"  got {obs.height} observations")
+        except Exception as e:
+            # a transient weather-API issue shouldn't leave stale gold: warn and
+            # regenerate gold without weather features this cycle.
+            print(f"  WARNING: weather fetch failed ({e}); continuing without weather")
 
     summary = pipeline.run(cfg, silver, args.out, model_path=args.model,
                            state_db=args.state_db, context=context)
