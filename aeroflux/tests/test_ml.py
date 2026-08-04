@@ -216,8 +216,9 @@ def test_weather_asof_matches_latest_prior_observation():
     # W1 @ 11:50 -> latest prior KATL obs is 11:45 (wind 15, IFR)
     assert by["W1"]["origin_wx_wind_kt"] == 15.0
     assert by["W1"]["origin_wx_ifr"] == 1
-    # W1 arrives 13:40 -> latest prior KMIA obs is 13:00 (wind 12), within tolerance
-    assert by["W1"]["dest_wx_wind_kt"] == 12.0
+    # dest weather now keyed on SCORE TIME (sched_dep 11:50), not arrival:
+    # latest prior KMIA obs at/BEFORE 11:50 is the 11:30 obs (wind 5)
+    assert by["W1"]["dest_wx_wind_kt"] == 5.0
     # W2 departs before any KATL obs -> null (no leakage from future obs)
     assert by["W2"]["origin_wx_wind_kt"] is None
 
@@ -233,39 +234,70 @@ def test_weather_channel_column_manifest():
     from aeroflux_ml import CHANNEL_OUTPUTS
     assert set(CHANNEL_OUTPUTS["weather"]) == {
         "origin_wx_wind_kt", "origin_wx_vis_mi", "origin_wx_ifr",
-        "dest_wx_wind_kt", "dest_wx_vis_mi", "dest_wx_ifr"}
+        "origin_wx_temp_c", "origin_wx_ceiling_ft",
+        "dest_wx_wind_kt", "dest_wx_vis_mi", "dest_wx_ifr",
+        "dest_wx_temp_c", "dest_wx_ceiling_ft"}
 
 
-# --- BTS local-time -> UTC conversion via airport tz ------------------------
+def test_ncei_parse_matches_or568_fields():
+    from aeroflux_ml import parse_ncei_records
+    # ISD coded rows: TMP tenths degC, WND [dir,q,type,speed_tenths_mps,q], CIG meters
+    recs = [
+        {"STATION": "72219013874", "DATE": "2026-07-30T12:00:00",
+         "TMP": "+0230,1", "WND": "270,1,N,0051,1", "CIG": "00300,1,9,N"},   # low ceiling -> IFR
+        {"STATION": "72219013874", "DATE": "2026-07-30T13:00:00",
+         "TMP": "+9999,9", "WND": "999,9,9,9999,9", "CIG": "99999,9,9,N"},   # all sentinels -> null
+    ]
+    obs = parse_ncei_records(recs)
+    r0 = obs.filter(pl.col("obs_time").dt.hour() == 12).to_dicts()[0]
+    assert abs(r0["temp_c"] - 23.0) < 1e-6                 # +0230 -> 23.0 C
+    assert abs(r0["wind_kt"] - (5.1 * 1.9438445)) < 1e-3   # 0051 -> 5.1 m/s -> kt
+    assert abs(r0["ceiling_ft"] - (300 * 3.2808399)) < 1e-3  # 300 m -> ft
+    assert r0["ifr"] == 1                                   # ceiling ~984 ft < 1000
+    r1 = obs.filter(pl.col("obs_time").dt.hour() == 13).to_dicts()[0]
+    assert r1["temp_c"] is None and r1["wind_kt"] is None and r1["ceiling_ft"] is None
 
-def test_from_bts_converts_local_times_to_utc():
-    from aeroflux_ml.schema import from_bts
-    # KDFW is America/Chicago; late July -> CDT = UTC-5. 08:00 local -> 13:00 UTC.
-    bts = pl.DataFrame({
-        "FL_DATE": ["2026-07-30"], "OP_UNIQUE_CARRIER": ["AA"],
-        "OP_CARRIER_FL_NUM": ["100"], "TAIL_NUM": ["N826AA"],
-        "ORIGIN": ["DFW"], "DEST": ["LGA"],
-        "CRS_DEP_TIME": [800], "CRS_ARR_TIME": [1230],
-        "DEP_TIME": [805], "ARR_TIME": [1235],
+
+# --- METAR train/serve parity: IEM parse + leakage-safe score-time keying -----
+
+def test_iem_parse_full_schema():
+    from aeroflux_ml.weather import _parse_iem
+    raw = pl.DataFrame({
+        "station": ["DFW", "DFW"],
+        "valid": ["2026-07-30 12:53", "2026-07-30 13:53"],
+        "sknt": [9.0, 15.0], "vsby": [10.0, 2.0], "tmpf": [82.4, 77.0],
+        "skyc1": ["FEW", "OVC"], "skyl1": [25000.0, 800.0],
     })
-    tz = {"DFW": "America/Chicago", "LGA": "America/New_York",
-          "KDFW": "America/Chicago", "KLGA": "America/New_York"}
-    out = from_bts(bts, airport_tz=tz)
-    dep = out["sched_dep"][0]
-    assert dep.hour == 13 and dep.minute == 0        # 08:00 CDT -> 13:00 UTC
-    # arrival is New York (EDT = UTC-4): 12:30 local -> 16:30 UTC
-    arr = out["sched_arr"][0]
-    assert arr.hour == 16 and arr.minute == 30
+    obs = _parse_iem(raw)
+    r0 = obs.filter(pl.col("obs_time").dt.hour() == 12).to_dicts()[0]
+    assert r0["wind_kt"] == 9.0 and r0["vis_mi"] == 10.0
+    assert abs(r0["temp_c"] - 28.0) < 0.1          # 82.4F -> 28C
+    assert r0["ceiling_ft"] is None                # FEW is not a ceiling
+    assert r0["ifr"] == 0
+    r1 = obs.filter(pl.col("obs_time").dt.hour() == 13).to_dicts()[0]
+    assert r1["ceiling_ft"] == 800.0               # OVC 800 -> ceiling
+    assert r1["ifr"] == 1                          # ceiling<1000 and vis<3
 
 
-def test_from_bts_without_tz_stays_naive_local():
-    from aeroflux_ml.schema import from_bts
-    bts = pl.DataFrame({
-        "FL_DATE": ["2026-07-30"], "OP_UNIQUE_CARRIER": ["AA"],
-        "OP_CARRIER_FL_NUM": ["100"], "TAIL_NUM": ["N1"],
-        "ORIGIN": ["DFW"], "DEST": ["LGA"],
-        "CRS_DEP_TIME": [800], "CRS_ARR_TIME": [1230],
-        "DEP_TIME": [800], "ARR_TIME": [1230],
+def test_weather_scored_at_departure_not_arrival():
+    # destination weather must be taken at the SCORE TIME (sched_dep), not arrival
+    obs = pl.DataFrame({
+        "station": ["KMIA", "KMIA"],
+        "obs_time": ["2026-07-04T12:00:00", "2026-07-04T14:00:00"],
+        "wind_kt": [5.0, 25.0], "vis_mi": [10.0, 1.0], "ifr": [0, 1],
+        "temp_c": [30.0, 31.0], "ceiling_ft": [None, 500.0],
+    }).with_columns(pl.col("obs_time").str.to_datetime())
+    flights = pl.DataFrame({
+        "flight_instance_id": ["W1"], "hex": [None], "tail_number": [None],
+        "carrier_icao": ["AAL"], "origin": ["KATL"], "destination": ["KMIA"],
+        # departs 12:15 (score time), scheduled arrival 14:15
+        "scheduled_gate_departure": ["2026-07-04T12:15:00Z"],
+        "scheduled_gate_arrival": ["2026-07-04T14:15:00Z"],
+        "actual_off": [None], "actual_on": [None],
     })
-    out = from_bts(bts)                    # no tz map -> unchanged local wall clock
-    assert out["sched_dep"][0].hour == 8
+    eng = FeatureEngineer(FeatureConfig(channels={"weather": True}))
+    df = eng.build(from_silver(flights, airframe_key="hex"), context={"weather_obs": obs})
+    r = df.to_dicts()[0]
+    # dest weather must reflect the 12:00 obs (calm), NOT the 14:00 arrival obs (storm)
+    assert r["dest_wx_wind_kt"] == 5.0
+    assert r["dest_wx_ifr"] == 0

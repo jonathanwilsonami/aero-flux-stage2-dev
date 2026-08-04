@@ -134,7 +134,8 @@ def from_bts(
     def _bts_time(date_col: str, hhmm_col: str) -> pl.Expr:
         # BTS times are local HHMM; combine FL_DATE + HHMM into a naive datetime,
         # then localize to UTC below if airport_tz is supplied.
-        hhmm = pl.col(hhmm_col).cast(pl.Utf8).str.zfill(4)
+        hhmm = (pl.col(hhmm_col).cast(pl.Float64, strict=False)
+                .cast(pl.Int64, strict=False).cast(pl.Utf8).str.zfill(4))
         return (
             pl.col(date_col).cast(pl.Utf8) + "T" + hhmm.str.slice(0, 2) + ":" + hhmm.str.slice(2, 2)
         ).str.to_datetime(strict=False, time_unit="us")
