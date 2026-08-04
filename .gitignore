@@ -4,7 +4,7 @@
 # Notes
 prompts/
 journal.txt
-notes-todos.txt
+/notes/*
 
 # Prototypes 
 *_proto
@@ -24,7 +24,8 @@ notes-todos.txt
 *.xlsx
 *.json* 
 *.parquet
-!aeroflux/aeroflux_parser/data/*
+aeroflux/data/*
+# !aeroflux/aeroflux_parser/data/*
 
 
 # Python 
