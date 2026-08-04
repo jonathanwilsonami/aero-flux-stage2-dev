@@ -69,7 +69,11 @@ def main() -> int:
     ap.add_argument("--cache", default="data/bts", help="BTS cache dir (for --months)")
     ap.add_argument("--out", default="./out_bts")
     ap.add_argument("--no-weather", action="store_true",
-                    help="skip archived-METAR weather (offline / faster)")
+                    help="skip weather entirely (offline / faster)")
+    ap.add_argument("--weather-cache",
+                    help="dir of cached NCEI weather_clean_YYYY_MM.parquet (no re-fetch)")
+    ap.add_argument("--station-bridge",
+                    help="station->ICAO map (CSV/Parquet with [station, icao]) for --weather-cache")
     ap.add_argument("--delay-threshold", type=int, default=15,
                     help="minutes of arrival delay that count as 'delayed' (label)")
     ap.add_argument("--show", type=int, default=3)
@@ -92,27 +96,38 @@ def main() -> int:
         airport_tz=_tz_map(bts),
     )
 
-    # attach archived-METAR weather over the file's date range (same core as live)
+    # attach weather (same feature core as live). Prefer the local NCEI cache
+    # (already-fetched years, no network) when --weather-cache is given; else
+    # fall back to archived METAR over the file's date range.
     context = None
     cfg = FeatureConfig()
     if not args.no_weather:
-        from datetime import datetime
-        from aeroflux_ml.weather import fetch_metar_history
         sd = canonical["sched_dep"].drop_nulls()
-        if sd.len():
-            start = sd.min()
-            end = canonical["sched_arr"].drop_nulls().max() or sd.max()
+        months = sorted({(d.year, d.month) for d in sd.to_list()}) if sd.len() else []
+        obs = None
+        if args.weather_cache and args.station_bridge:
+            from aeroflux_ml.weather_cache import load_weather_cache, load_station_bridge
+            print(f"Loading cached NCEI weather for {len(months)} month(s) "
+                  f"from {args.weather_cache} ...")
+            bridge = load_station_bridge(args.station_bridge)
+            obs = load_weather_cache(args.weather_cache, months, bridge)
+            print(f"  {obs.height} observations from cache "
+                  f"({obs['station'].n_unique()} airports)")
+        elif sd.len():
+            from aeroflux_ml.weather import fetch_metar_history
+            start, end = sd.min(), (canonical["sched_arr"].drop_nulls().max() or sd.max())
             airports = sorted({*canonical["origin"].drop_nulls().to_list(),
                                *canonical["destination"].drop_nulls().to_list()})
             print(f"Fetching archived METAR for {len(airports)} airport(s), "
                   f"{start.date()}..{end.date()} ...")
             try:
                 obs = fetch_metar_history(airports, start, end)
-                cfg.channels["weather"] = True
-                context = {"weather_obs": obs}
                 print(f"  got {obs.height} observations")
             except Exception as e:
                 print(f"  WARNING: weather fetch failed ({e}); continuing without weather")
+        if obs is not None and obs.height:
+            cfg.channels["weather"] = True
+            context = {"weather_obs": obs}
 
     eng = FeatureEngineer(cfg)
     gold = eng.build_matrix(canonical, context=context)
