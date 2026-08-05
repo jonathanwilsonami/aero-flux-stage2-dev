@@ -1,0 +1,66 @@
+# AeroFlux training pipeline — default config. Edit paths/params here, not code.
+run:
+  name: xgb_baseline
+  seed: 42
+  output_dir: model_outputs/runs
+
+data:
+  gold_path: out_bts/bts_gold.parquet   # gold from build_bts_gold.py
+  target: label_delayed
+  time_column: flight_key               # date-prefixed -> chronological
+  sample_fraction: null                 # e.g. 0.1 for a quick run
+
+preprocess:
+  include_gap_weather: false            # keep parity-safe features (no temp/ceiling)
+
+split:
+  strategy: time                        # time | random  (time avoids leakage)
+  test_size: 0.2
+
+validation:
+  min_rows: 100
+  max_null_fraction: 0.99
+  require_columns: []
+
+cv:
+  enabled: true
+  strategy: time                        # time-aware CV
+  n_splits: 3
+
+tuning:
+  enabled: false
+  grid:
+    max_depth: [4, 6, 8]
+    learning_rate: [0.05, 0.1]
+    n_estimators: [200, 400]
+
+# Baseline vs advanced: add a logistic model + the XGBoost model to compare.
+models:
+  - name: logreg_baseline
+    type: logistic
+    params: {max_iter: 200}
+  - name: xgb_full
+    type: xgboost
+    params: {max_depth: 6, learning_rate: 0.1, n_estimators: 300,
+             subsample: 0.8, colsample_bytree: 0.8}
+  # extension points (uncomment when ready):
+  # - name: spark_gbt
+  #   type: sparkml
+  #   params: {maxDepth: 6, maxIter: 100}
+  # - name: tf_mlp
+  #   type: tensorflow
+  #   params: {epochs: 20, hidden: [64, 32]}
+
+compute:
+  backend: local                        # local | spark
+  n_jobs: -1
+  use_gpu: false
+
+registry:
+  backend: local                        # local | mlflow
+  mlflow_uri: null
+
+outputs:
+  save_model: true
+  save_plots: true
+  save_metrics: true
