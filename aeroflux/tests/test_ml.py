@@ -301,3 +301,34 @@ def test_weather_scored_at_departure_not_arrival():
     # dest weather must reflect the 12:00 obs (calm), NOT the 14:00 arrival obs (storm)
     assert r["dest_wx_wind_kt"] == 5.0
     assert r["dest_wx_ifr"] == 0
+
+
+def test_feature_prep_policy_and_parity():
+    from aeroflux_ml import feature_prep as fp
+    # unscoreable dropped; rotation filled 0; weather left null; parity-safe features
+    df = pl.DataFrame({
+        "flight_key": ["A", "B"],
+        "sched_dep_hour": [None, 9], "sched_dep_dow": [None, 3],
+        "sched_dep_month": [None, 5], "is_weekend": [None, 0],
+        "sched_block_min": [None, 120],
+        "prev_leg_arr_delay_min": [None, None], "turnaround_buffer_min": [None, None],
+        "legs_into_day": [None, None], "inbound_resolved": [0, 0],
+        "origin_dep_demand": [None, 5], "dest_arr_demand": [None, 8],
+        "origin_recent_dep_delay": [None, None], "dest_recent_arr_delay": [None, None],
+        "origin_wx_wind_kt": [None, 10.0], "origin_wx_ifr": [None, 0],
+        "dest_wx_wind_kt": [None, 7.0], "dest_wx_ifr": [None, 0],
+        "origin_wx_vis_mi": [None, None], "origin_wx_temp_c": [None, None],
+        "origin_wx_ceiling_ft": [None, None], "dest_wx_vis_mi": [None, None],
+        "dest_wx_temp_c": [None, None], "dest_wx_ceiling_ft": [None, None],
+    })
+    out = fp.prepare(df)
+    assert out.height == 1                                   # unscoreable "A" dropped
+    r = out.to_dicts()[0]
+    assert r["prev_leg_arr_delay_min"] == 0                  # absence==0 filled
+    assert r["origin_dep_demand"] == 5
+    assert r["propagation_pressure_min"] == 0               # no inbound
+    assert "origin_wx_temp_c" not in out.columns            # parity-gap weather excluded
+    assert r["origin_wx_wind_kt"] == 10.0                    # parity-safe weather kept
+    # gap-weather opt-in adds the columns + missingness indicators
+    out2 = fp.prepare(df, include_gap_weather=True)
+    assert "origin_wx_temp_c" in out2.columns and "origin_wx_temp_c_missing" in out2.columns

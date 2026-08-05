@@ -27,4 +27,4 @@ venv/
 
 # Site / notes
 /.quarto/
-*.bkp
+*.bkp 
