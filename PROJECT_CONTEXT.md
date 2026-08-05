@@ -141,6 +141,26 @@ evaluate, compare, registry, runner, cli).
   expected; real-time serving and historical training are the real use cases.
 - `airport_to_station_2019.csv` is a single-year bridge (~358 airports) — covers
   majors; unmapped stations' obs are dropped (graceful).
+- **Live predictions skew pessimistic** (~80% flagged at-risk vs. the BTS
+  training base rate of ~18–22%, i.e. `positive_rate` ≈0.29 in `run.json`).
+  Confirmed NOT a feature-parity bug: with the live weather channel on
+  (`WEATHER=1`), all 18 model features are genuinely present with real values
+  (verified 2026-08-05) — the skew persists unchanged. Root cause is
+  **train/serve distribution shift in missingness**: `prev_leg_arr_delay_min`,
+  `turnaround_buffer_min`, `legs_into_day`, and the `origin/dest_recent_*_delay`
+  features are dense in BTS training but mostly null live
+  (`inbound_resolved = 0` for ~56% of live scoreable flights vs. rare in BTS,
+  since BTS rotation is near-fully resolved). XGBoost's learned
+  missing-value routing, tuned on BTS's rotation-mostly-known distribution,
+  appears to route rotation-unresolved live flights toward higher predicted
+  risk. Not a bug — a calibration issue. Candidate fixes (not yet done):
+  train on a live-like missingness distribution (e.g. synthetically null out
+  rotation/recent-delay for a fraction of BTS training rows to match live's
+  ~44–56% unresolved rate), calibrate probabilities post-hoc (Platt scaling
+  or isotonic regression against a live-labeled holdout), or add explicit
+  missingness indicators (similar to the `include_gap_weather` indicator
+  pattern) so the model can distinguish "genuinely low risk" from
+  "features unknown" instead of conflating them.
 
 ---
 

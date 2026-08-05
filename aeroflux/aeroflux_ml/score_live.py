@@ -60,8 +60,13 @@ def score_once(gold_path: str, model_path: str, model_version: str,
     prepped = fp.prepare(df, include_gap_weather=include_gap)
     if prepped.height == 0:
         print("  no scoreable rows this cycle"); return 0
-    feats = [c for c in fp.feature_columns(include_gap_weather=include_gap)
-             if c in prepped.columns]
+    # No `if c in prepped.columns` filter here on purpose: silently dropping a
+    # missing feature just shifts the failure downstream into an opaque XGBoost
+    # "Feature shape mismatch" (or worse, a silent width match by coincidence).
+    # If live gold is ever missing a column the model expects (e.g. the weather
+    # channel gets disabled again), fail loud here with a clear polars
+    # "column not found" instead.
+    feats = fp.feature_columns(include_gap_weather=include_gap)
     X = prepped.select(feats).to_numpy().astype("float32")
     model = joblib.load(model_path)
     proba = model.predict_proba(X)[:, 1]
