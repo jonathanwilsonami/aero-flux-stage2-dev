@@ -1,15 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/index.html</loc>
-    <lastmod>2026-07-25T14:00:16.684Z</lastmod>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/notes-todos.html</loc>
+    <lastmod>2026-08-02T11:19:23.184Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/integration.html</loc>
+    <lastmod>2026-08-05T02:04:01.047Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/common_commands.html</loc>
+    <lastmod>2026-08-05T01:04:56.455Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/clean_up.html</loc>
+    <lastmod>2026-08-05T01:48:45.570Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/aeroflux_stage2_proposal.html</loc>
+    <lastmod>2026-08-05T22:19:42.665Z</lastmod>
   </url>
   <url>
     <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/about.html</loc>
     <lastmod>2026-08-02T11:50:29.347Z</lastmod>
   </url>
   <url>
-    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/aeroflux_stage2_proposal.html</loc>
-    <lastmod>2026-08-02T17:58:04.609Z</lastmod>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/index.html</loc>
+    <lastmod>2026-07-25T14:00:16.684Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/cloud.html</loc>
+    <lastmod>2026-08-05T22:01:26.370Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/data_quality.html</loc>
+    <lastmod>2026-08-05T00:59:15.516Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/ml_pipeline.html</loc>
+    <lastmod>2026-08-05T01:44:10.831Z</lastmod>
   </url>
 </urlset>
