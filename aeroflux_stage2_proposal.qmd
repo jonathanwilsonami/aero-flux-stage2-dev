@@ -5,6 +5,7 @@ author:
   - Jonathan Wilson
   - Ryan Sollom
 date: "2026-07-18"
+date-format: "MMMM D, YYYY"
 
 format:
   html:
@@ -21,22 +22,57 @@ format:
     toc: false
     fig-pos: "H"
     link-citations: true
+    include-in-header: pdf-header.tex
 
   docx:
     toc: true
+    toc-depth: 3
     number-sections: true
+    reference-doc: aeroflux-reference.docx
 
 bibliography: references.bib
 csl: apa.csl
-cite-method: citeproc 
+cite-method: citeproc
 lightbox: true
 ---
+
+:::: {.content-visible when-format="html"}
+
+::: {.callout-note appearance="minimal"}
+**Course:** AIT 614 Sec 001  
+**Instructor:** Dr. Duoduo Liao  
+**Institution:** George Mason University
+::: 
+
+::: 
+
+:::: {.content-visible when-format="pdf"}
 
 ::: {.callout-note appearance="minimal"}
 **Course:** AIT 614 Sec 001  
 **Instructor:** Dr. Duoduo Liao  
 **Institution:** George Mason University
 :::
+
+```{=latex}
+\thispagestyle{empty}
+```
+
+{{< pagebreak >}}
+
+:::: 
+
+:::: {.content-visible when-format="docx"}
+
+::: {.callout-note appearance="minimal"}
+**Course:** AIT 614 Sec 001  
+**Instructor:** Dr. Duoduo Liao  
+**Institution:** George Mason University
+:::
+
+{{< pagebreak >}}
+
+::::
 
 # Introduction
 
@@ -170,6 +206,10 @@ in @fig-aeroflux2-arch.
 
 ::: {.content-visible when-format="pdf"}
 ![AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud.](images/design/aeroflux2-arch-v2.pdf){#fig-aeroflux2-arch}
+::: 
+
+::: {.content-visible when-format="docx"}
+![AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud.](images/design/aeroflux2-arch-v2.png){#fig-aeroflux2-arch width=100%}
 :::
 
 **Ingestion and streaming.** Dedicated services publish each source—SWIM flight
