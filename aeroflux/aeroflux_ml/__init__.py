@@ -13,6 +13,7 @@ from .channels import CHANNELS, CHANNEL_OUTPUTS, channel, WEATHER_OBS_COLUMNS
 from .engineer import FeatureEngineer
 from .inference import InferenceEngine
 from .weather import fetch_metar_live, fetch_metar_history
+from .weather import parse_ncei_records
 from .io import (
     write_table, StateRepository, InMemoryStateRepository, SqliteStateRepository,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "CHANNELS", "CHANNEL_OUTPUTS", "channel", "WEATHER_OBS_COLUMNS",
     "FeatureEngineer", "InferenceEngine",
     "fetch_metar_live", "fetch_metar_history",
+    "parse_ncei_records",
     "write_table", "StateRepository", "InMemoryStateRepository",
     "SqliteStateRepository",
 ]
