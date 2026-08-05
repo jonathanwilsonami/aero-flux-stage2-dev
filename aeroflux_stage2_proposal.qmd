@@ -157,8 +157,8 @@ pipeline fuses by GUFI across many messages over time.
 # Methodology and Proposed Solution
 
 **Architecture.** AeroFlux Stage 2 is a streaming lakehouse: heterogeneous
-aviation and weather sources are ingested continuously, processed by a
-distributed compute engine, and persisted across bronze → silver → gold tiers.
+aviation and weather sources are ingested continuously, processed through a
+stream-processing core, and persisted across bronze → silver → gold tiers.
 Every component runs as a container, so the platform deploys unchanged on a
 laptop, university hardware, or a single cloud VM, with managed AWS services as
 an optional scale path rather than a requirement. The full architecture is shown
@@ -169,17 +169,19 @@ in @fig-aeroflux2-arch.
 :::
 
 ::: {.content-visible when-format="pdf"}
-![AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud.](images/design/aeroflux2-arch-v2.pdf){#fig-aeroflux2-arch-pdf}
+![AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud.](images/design/aeroflux2-arch-v2.pdf){#fig-aeroflux2-arch}
 :::
 
 **Ingestion and streaming.** Dedicated services publish each source—SWIM flight
 messages, ADS-B, and weather—to a dedicated Apache Kafka topic with 48-hour
 retention, decoupling producers from consumers and providing a replayable event
-history. Apache Spark Structured Streaming consumes these topics as the
-platform's primary big-data compute engine, applying the `aeroflux_parser`
+history. A Kafka-consuming stream processor applies the `aeroflux_parser`
 library to validate each message against a strict schema contract and fuse
 messages into per-flight canonical records—keyed on the stable GUFI, with ADS-B
-used to resolve the aircraft tail that SWIM omits.
+used to resolve the aircraft tail that SWIM omits. The same feature and inference
+core runs on Polars for single-node deployment and executes within Apache Spark
+Structured Streaming's `foreachBatch` for distributed scale-out, so the platform
+spans laptop to cluster without a rewrite.
 
 **Storage tiers and retention.** Processing follows a bronze → silver → gold
 progression. Raw and fused per-flight state are held hot in PostgreSQL on a
@@ -192,15 +194,18 @@ for training and replay. Because storage backends sit behind configuration, the
 local stack (PostgreSQL, MinIO) swaps to managed cloud services (RDS, S3) with no
 code change.
 
-**Machine learning.** The same Spark engine runs feature engineering and XGBoost
-inference via `foreachBatch`, comparing a logistic-regression baseline against an
-advanced gradient-boosted model enriched with propagation, weather, and rolling
-airport-demand features [@chen2016xgboost; @beatty1999preliminary;
-@kafle2016propagation]. Feature engineering is expressed once in a source-agnostic
-core, so historical (BTS) training and live serving compute identical features by
-construction; that core runs on Polars locally for development and in Spark at
-scale. Both models target a 15-minute arrival-delay classification, are tracked
-in MLflow, and are explained with SHAP [@lundberg2017shap].
+**Machine learning.** The pipeline establishes a logistic-regression *baseline*
+on flight-level features and an advanced gradient-boosted model (XGBoost) that
+improves on it by adding propagation, weather, and rolling airport-demand
+features [@chen2016xgboost; @beatty1999preliminary; @kafle2016propagation].
+Feature engineering is expressed once in a source-agnostic core, so historical
+(BTS) training and live serving compute identical features by construction; that
+core runs on Polars locally for development and within Spark at scale. For
+historical training, weather is drawn from a cached NOAA NCEI archive; live
+serving uses METAR observations mapped into the same feature schema, preserving
+train/serve parity at the feature level. Both models target a 15-minute
+arrival-delay classification, are tracked in a run registry (with optional MLflow
+integration), and are explained with SHAP [@lundberg2017shap].
 
 **AI orchestration prototype.** A lightweight *Aviation Operations Analyst* uses
 retrieval-augmented generation [@lewis2020rag] and a constrained LangGraph
@@ -211,7 +216,24 @@ groundedness, citation accuracy, and appropriate tool use. As an optional stretc
 goal, a read-only Model Context Protocol (MCP) server may expose these tools
 through a standardized interface.
 
-**Evaluation.** Both predictive and system performance are evaluated.
+**Evaluation.** We evaluate at two levels, each against an explicit baseline.
+
+*Predictive (model) baseline.* The logistic-regression classifier is the
+baseline; the advanced XGBoost model is the improvement. Both target a 15-minute
+arrival-delay classification and are compared on ROC-AUC, PR-AUC, F1, and Brier
+score with calibration, using point-in-time features to prevent leakage. We also
+report train/serve behavior honestly: because rotation and recent-delay features
+are dense in historical training but sparse in live serving—airframe resolution
+depends on ADS-B coverage—live predictions exhibit a distribution shift we
+quantify and discuss, with probability calibration identified as future work.
+
+*System baseline.* The system is evaluated on sustained throughput (messages per
+second), ingestion-to-gold latency, airframe-resolution coverage (the share of
+live flights linked to an ADS-B airframe), fusion completeness (per-flight field
+fill rates), and resource footprint. Baseline measurements are taken at initial
+deployment and compared against achieved performance after optimization,
+demonstrating that the pipeline moves data correctly and at scale through every
+tier.
 
 # Development Environment
 
