@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
+import functools
 
 # A compact set of major US hubs (icao, iata, name, lat, lon) — enough for a
 # lively map without shipping the full 28k dimension.
@@ -55,6 +56,24 @@ def is_live() -> bool:
     return bool(dsn())
 
 
+def _merge_live_predictions(df):
+    """Overlay predictions written by aeroflux_ml.score_live (AEROFLUX_PREDICTIONS
+    parquet), so the UI reflects the live XGBoost model, not a placeholder."""
+    pq = os.getenv("AEROFLUX_PREDICTIONS")
+    if not pq or not os.path.exists(pq):
+        return df
+    try:
+        import pandas as pd
+        pr = pd.read_parquet(pq)[["flight_key", "delay_probability"]].rename(
+            columns={"flight_key": "flight_instance_id", "delay_probability": "_p"})
+        df = df.merge(pr, on="flight_instance_id", how="left")
+        df["delay_prob"] = df["_p"].where(df["_p"].notna(), df.get("delay_prob", 0.25))
+        df = df.drop(columns=["_p"])
+    except Exception:
+        pass
+    return df
+
+
 @st.cache_data(ttl=30)
 def load_flights() -> pd.DataFrame:
     """Current flights with origin/dest coords + a delay probability.
@@ -64,7 +83,7 @@ def load_flights() -> pd.DataFrame:
             return _load_flights_pg()
         except Exception as e:  # fall back so the demo never dies
             st.warning(f"Live DB unavailable ({e}); showing sample data.")
-    return _sample_flights()
+    return _merge_live_predictions(_sample_flights())
 
 
 def _load_flights_pg() -> pd.DataFrame:
@@ -78,36 +97,62 @@ def _load_flights_pg() -> pd.DataFrame:
         WHERE origin IS NOT NULL AND destination IS NOT NULL
         LIMIT 4000
     """
-    with psycopg.connect(dsn()) as c:
-        rows = c.execute(q).fetchall()
-        cols = [d[0] for d in c.description]
+    with psycopg.connect(dsn()) as conn:
+        with conn.cursor() as cur:          # psycopg3: use the CURSOR, not the connection
+            cur.execute(q)
+            cols = [d[0] for d in cur.description]
+            rows = cur.fetchall()
     df = pd.DataFrame(rows, columns=cols)
     df = _attach_coords(df)
-    # try to pull real predictions; else a placeholder
     df["delay_prob"] = _try_predictions(df)
     return df.dropna(subset=["o_lat", "d_lat"])
 
 
 def _try_predictions(df: pd.DataFrame) -> pd.Series:
-    try:
-        import psycopg
-        with psycopg.connect(dsn()) as c:
-            rows = c.execute(
-                "SELECT flight_key, delay_probability FROM predictions").fetchall()
-        pmap = {k: v for k, v in rows}
-        return df["flight_instance_id"].map(pmap).fillna(0.25)
-    except Exception:
-        return pd.Series([0.25] * len(df), index=df.index)
+    """Prefer the predictions parquet (what the scoring loop writes); fall back to 0.25."""
+    import os
+    pq = os.getenv("AEROFLUX_PREDICTIONS")
+    if pq and os.path.exists(pq):
+        try:
+            pr = pd.read_parquet(pq)[["flight_key", "delay_probability"]]
+            pmap = dict(zip(pr["flight_key"], pr["delay_probability"]))
+            return df["flight_instance_id"].map(pmap).fillna(0.25)
+        except Exception:
+            pass
+    return pd.Series([0.25] * len(df), index=df.index)
 
+
+@functools.lru_cache(maxsize=1)
+def _airport_coords() -> dict:
+    """Load full ICAO -> (lat, lon) from the parser's airports.csv (28k airports).
+    Falls back to the bundled HUBS if the file isn't found."""
+    import csv
+    # look for airports.csv relative to the repo (adjust if your layout differs)
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(here, "..", "..", "aeroflux_parser", "data", "airports.csv"),
+        os.path.join(here, "airports.csv"),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            coords = {}
+            with open(path, newline="") as fh:
+                for r in csv.DictReader(fh):
+                    try:
+                        coords[r["icao"]] = (float(r["lat"]), float(r["lon"]))
+                    except (ValueError, KeyError):
+                        continue
+            if coords:
+                return coords
+    # fallback: the bundled hubs
+    return {icao: (lat, lon) for icao, iata, name, lat, lon in HUBS}
 
 def _attach_coords(df: pd.DataFrame) -> pd.DataFrame:
-    def g(code, i):
-        c = _COORDS.get(code)
-        return c[i] if c else None
-    df["o_lat"] = df["origin"].map(lambda x: g(x, 0))
-    df["o_lon"] = df["origin"].map(lambda x: g(x, 1))
-    df["d_lat"] = df["destination"].map(lambda x: g(x, 0))
-    df["d_lon"] = df["destination"].map(lambda x: g(x, 1))
+    coords = _airport_coords()
+    df["o_lat"] = df["origin"].map(lambda x: coords.get(x, (None, None))[0])
+    df["o_lon"] = df["origin"].map(lambda x: coords.get(x, (None, None))[1])
+    df["d_lat"] = df["destination"].map(lambda x: coords.get(x, (None, None))[0])
+    df["d_lon"] = df["destination"].map(lambda x: coords.get(x, (None, None))[1])
     return df
 
 
@@ -145,6 +190,10 @@ def _sample_flights(n: int = 240) -> pd.DataFrame:
 @st.cache_data(ttl=30)
 def kpis() -> dict:
     df = load_flights()
+    df["carrier_name"] = df["carrier_name"].fillna("Unknown")
+    df["origin"] = df["origin"].fillna("UNK")
+    df["destination"] = df["destination"].fillna("UNK")
+    df["flight_status"] = df["flight_status"].fillna("UNKNOWN")
     active = int((df["flight_status"] == "ACTIVE").sum()) if "flight_status" in df else 0
     hex_cov = float(df["hex"].notna().mean()) if "hex" in df else 0.0
     at_risk = int((df["delay_prob"] >= 0.5).sum()) if "delay_prob" in df else 0
