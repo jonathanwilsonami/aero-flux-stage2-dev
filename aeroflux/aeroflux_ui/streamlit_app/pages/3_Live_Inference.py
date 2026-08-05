@@ -19,20 +19,23 @@ st.title("🔮 Live Inference")
 st.caption("Score a flight for arrival-delay risk and see what's driving it.")
 
 df = load_flights()
+df = df[df["flight_status"].fillna("UNKNOWN").isin(["ACTIVE", "PLANNED"])]
 
 
 @st.cache_resource
 def load_model():
-    """Reuse the trained classifier if the joblib is present, else None."""
-    for name in ("xgb_classifier_xgb_full_aircraft.joblib",
+    """Load the trained classifier from the app's own models/ dir."""
+    import joblib
+    here = Path(__file__).resolve().parent.parent      # aeroflux_ui/streamlit_app/
+    for name in ("xgb_classifier_live.joblib",
+                 "xgb_classifier_xgb_full_aircraft.joblib",
                  "xgb_classifier_xgb_full.joblib"):
-        p = Path(__file__).resolve().parent.parent / "models" / name
+        p = here / "models" / name
         if p.exists():
             try:
-                import joblib
                 return joblib.load(p)
-            except Exception:
-                pass
+            except Exception as e:
+                st.warning(f"model load failed: {e}")
     return None
 
 
@@ -40,9 +43,9 @@ MODEL = load_model()
 
 # --- flight picker (cascading) --------------------------------------------
 c1, c2, c3 = st.columns(3)
-carrier = c1.selectbox("Carrier", ["All"] + sorted(df["carrier_name"].unique().tolist()))
+carrier = c1.selectbox("Carrier", ["All"] + sorted(c for c in df["carrier_name"].dropna().unique() if isinstance(c, str)))
 d = df if carrier == "All" else df[df["carrier_name"] == carrier]
-origin = c2.selectbox("Origin", ["All"] + sorted(d["origin"].unique().tolist()))
+origin = c2.selectbox("Origin", ["All"] + sorted(c for c in d["origin"].dropna().unique() if isinstance(c, str)))
 d = d if origin == "All" else d[d["origin"] == origin]
 options = d["callsign"] + "  ·  " + d["origin"] + "→" + d["destination"]
 pick = c3.selectbox("Flight", options.tolist())
@@ -53,17 +56,14 @@ row = d.iloc[options.tolist().index(pick)]
 
 # --- predict ---------------------------------------------------------------
 def predict(r) -> float:
-    if MODEL is not None:
-        try:
-            import numpy as np
-            feats = MODEL.get_booster().feature_names
-            x = pd.DataFrame([[0] * len(feats)], columns=feats)  # demo: neutral vector
-            return float(MODEL.predict_proba(x)[0, 1])
-        except Exception:
-            pass
-    return float(r["delay_prob"])   # heuristic / precomputed fallback
+    # delay_prob already carries the live model's prediction (merged in data_access
+    # from the predictions table / parquet the scoring loop writes).
+    return float(r.get("delay_prob", 0.25))
 
 prob = predict(row)
+if abs(prob - 0.25) < 1e-9:
+    st.info("No live prediction for this flight yet (it may lack a scheduled "
+            "departure, so it isn't scoreable). Pick an ACTIVE/PLANNED flight.")
 
 # --- layout: gauge + details ----------------------------------------------
 g, info = st.columns([0.45, 0.55])
