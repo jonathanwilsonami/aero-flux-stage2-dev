@@ -31,7 +31,7 @@ RETENTION_HOURS="${RETENTION_HOURS:-48}"
 WEATHER="${WEATHER:-1}"
 STORAGE_DEST="${STORAGE_DEST:-}"
 
-log(){ printf "\n\033[1;36m==> %s\033[0m\n" "$*"; }
+log(){ printf "\n\033[1;36m==> %s | %s\033[0m\n" "$(date +%H:%M:%S)" "$*"; }
 die(){ printf "\033[1;31mERROR:\033[0m %s\n" "$*" >&2; exit 1; }
 need(){ command -v "$1" >/dev/null 2>&1; }
 
