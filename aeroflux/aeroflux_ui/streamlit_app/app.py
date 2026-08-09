@@ -5,6 +5,8 @@ Live data:  set AEROFLUX_DSN=postgresql://... (else realistic sample data)
 """
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -22,7 +24,14 @@ with right:
     k = kpis()
     badge = "🟢 LIVE" if k["mode"] == "LIVE" else "🟡 SAMPLE"
     st.markdown(f"### {badge}")
-    st.caption("Set `AEROFLUX_DSN` for live data" if k["mode"] == "SAMPLE" else "Connected to Postgres")
+    if k["mode"] == "SAMPLE":
+        st.caption("Set `AEROFLUX_DSN` (Postgres) or `STATE_BACKEND=dynamodb` for live data")
+    else:
+        # was hardcoded to "Connected to Postgres" regardless of backend —
+        # wrong once STATE_BACKEND=dynamodb became a real live path too.
+        backend = os.getenv("STATE_BACKEND", "postgres").lower()
+        label = "DynamoDB (cloud)" if backend == "dynamodb" else "Postgres (local)"
+        st.caption(f"Connected to {label}")
 
 st.divider()
 
