@@ -11,7 +11,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from data_access import load_flights
+from data_access import load_flights, current_flights, RECENT_HOURS
 
 # The real constraint here is the browser's Plotly render, not the box or the
 # DynamoDB read (both measured fast well past this size) — thousands of geo
@@ -24,9 +24,13 @@ st.set_page_config(page_title="AeroFlux · Live Map", page_icon="🗺️", layou
 st.title("🗺️ Live Network Map")
 st.caption("Recent flights, origin -> destination, colored by predicted delay risk.")
 
-df = load_flights().copy()
+tracked_n = len(load_flights())
+df = current_flights().copy()  # airborne now, or near sched/actual departure-arrival
 df = df.dropna(subset=["o_lat", "o_lon", "d_lat", "d_lon"])
 df["flight_status"] = df["flight_status"].fillna("UNKNOWN")
+st.caption(f"Tracked (48h window): {tracked_n:,} · shown here: flights currently active or "
+           f"within {RECENT_HOURS:.0f}h of scheduled/actual departure-arrival "
+           f"(tune with `RECENT_HOURS`).")
 
 f1, f2, f3 = st.columns([0.4, 0.3, 0.3])
 all_status = ["ACTIVE", "PLANNED", "COMPLETED", "UNKNOWN"]
@@ -75,7 +79,7 @@ if len(df) > len(map_df):
                f"metrics below reflect all {len(df):,}).")
 
 l, m, r = st.columns(3)
-l.metric("Flights tracked", f"{len(df):,}")
+l.metric("Current flights", f"{len(df):,}")
 m.metric("At-risk (>=50%)", f"{int((df['delay_prob'] >= 0.5).sum()):,}")
 r.metric("Airborne", f"{int((df['flight_status'] == 'ACTIVE').sum()):,}")
 st.caption("green low risk -> red high risk. Lines show origin->destination for recent flights.")
