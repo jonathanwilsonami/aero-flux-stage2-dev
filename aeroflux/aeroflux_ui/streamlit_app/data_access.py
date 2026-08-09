@@ -52,7 +52,23 @@ def dsn() -> str | None:
     return os.getenv("AEROFLUX_DSN")
 
 
+def _bridge_dsn_env() -> None:
+    """state_backend_from_env()'s postgres branch reads $DSN — the shared
+    convention score_live.py/sync_cloud.py already use. This app's existing,
+    documented convention is $AEROFLUX_DSN. Bridge one to the other here
+    rather than forking the factory's contract just for this caller, so
+    local dev keeps working exactly as documented (README: export
+    AEROFLUX_DSN=...) with zero code changes to switch backends."""
+    if os.getenv("AEROFLUX_DSN") and not os.getenv("DSN"):
+        os.environ["DSN"] = os.environ["AEROFLUX_DSN"]
+
+
 def is_live() -> bool:
+    """True if configured to read from a real backend rather than sample
+    data: STATE_BACKEND=dynamodb always counts; the postgres backend (the
+    default) still needs a real $AEROFLUX_DSN, same as before."""
+    if os.getenv("STATE_BACKEND", "postgres").lower() == "dynamodb":
+        return True
     return bool(dsn())
 
 
@@ -74,47 +90,77 @@ def _merge_live_predictions(df):
     return df
 
 
-@st.cache_data(ttl=30)
+# Columns the map/KPI/inference pages expect on every flight row, regardless
+# of which backend answered — Postgres's SELECT always returns all of these;
+# a DynamoDB item only carries whichever attributes were actually upserted,
+# so missing ones get reindexed to None rather than KeyError-ing downstream.
+_STATE_DISPLAY_COLS = [
+    "flight_instance_id", "callsign", "carrier_icao", "carrier_name",
+    "origin", "destination", "flight_status", "hex", "tail_number",
+    "scheduled_gate_departure", "scheduled_gate_arrival",
+    "last_latitude", "last_longitude",
+]
+
+
+_FLIGHTS_LIMIT = 4000  # mirrors the old SQL's LIMIT 4000 — the map only ever shows a few
+                       # thousand at once, and on DynamoDB this bounds Scan cost directly
+
+# 300s, not 30s: sync_cloud only refreshes the cloud backends every SYNC_EVERY
+# (default 300s), so re-querying every 30s was pure wasted read cost/latency
+# for data that hadn't changed. Aligned to the actual write cadence.
+@st.cache_data(ttl=300)
 def load_flights() -> pd.DataFrame:
-    """Current flights with origin/dest coords + a delay probability.
-    Live from Postgres if AEROFLUX_DSN is set, else sample."""
+    """Current flights with origin/dest coords + a delay probability. Live
+    from the configured StateStore — Postgres (AEROFLUX_DSN) by default, or
+    DynamoDB when STATE_BACKEND=dynamodb — if reachable, else sample."""
     if is_live():
         try:
-            return _load_flights_pg()
+            return _load_flights_backend()
         except Exception as e:  # fall back so the demo never dies
-            st.warning(f"Live DB unavailable ({e}); showing sample data.")
+            st.warning(f"Live backend unavailable ({e}); showing sample data.")
     return _merge_live_predictions(_sample_flights())
 
 
-def _load_flights_pg() -> pd.DataFrame:
-    import psycopg
-    q = """
-        SELECT flight_instance_id, callsign, carrier_icao, carrier_name,
-               origin, destination, flight_status, hex, tail_number,
-               scheduled_gate_departure, scheduled_gate_arrival,
-               last_latitude, last_longitude
-        FROM flight_instance
-        WHERE origin IS NOT NULL AND destination IS NOT NULL
-        LIMIT 4000
-    """
-    with psycopg.connect(dsn()) as conn:
-        with conn.cursor() as cur:          # psycopg3: use the CURSOR, not the connection
-            cur.execute(q)
-            cols = [d[0] for d in cur.description]
-            rows = cur.fetchall()
-    df = pd.DataFrame(rows, columns=cols)
+def _load_flights_backend() -> pd.DataFrame:
+    _bridge_dsn_env()
+    from aeroflux_ml import state_backend_from_env
+    repo = state_backend_from_env()
+    hours = int(os.getenv("STATE_HOURS", "48"))
+    rows = repo.recent_flight_states(hours=hours, limit=_FLIGHTS_LIMIT)
+    if not rows:
+        raise RuntimeError("backend returned zero flight states")
+    df = pd.DataFrame(rows)
+    # DynamoDB items key on `flight_key` (the table's actual partition key);
+    # Postgres rows key on `flight_instance_id`. Normalize to one name so
+    # every downstream consumer (coords, KPIs, the inference page) only
+    # ever has to know about one.
+    if "flight_instance_id" not in df.columns and "flight_key" in df.columns:
+        df = df.rename(columns={"flight_key": "flight_instance_id"})
+    for c in _STATE_DISPLAY_COLS:
+        if c not in df.columns:
+            df[c] = None
+    df = (df[df["origin"].notna() & df["destination"].notna()]
+          .head(4000).reset_index(drop=True))  # same cap the old SQL's LIMIT 4000 had
     df = _attach_coords(df)
-    df["delay_prob"] = _try_predictions(df)
+    df["delay_prob"] = _try_predictions_backend(df)
     return df.dropna(subset=["o_lat", "d_lat"])
 
 
-def _try_predictions(df: pd.DataFrame) -> pd.Series:
-    """Prefer the predictions parquet (what the scoring loop writes); fall back to 0.25."""
-    import os
+def _try_predictions_backend(df: pd.DataFrame) -> pd.Series:
+    """Prefer delay_probability already on the state rows — DynamoDB embeds
+    prediction + state on the same item (the disjoint-attribute design), so
+    for that backend this is already there, no second lookup needed.
+    Otherwise (the Postgres/local path, where predictions live separately)
+    fall back to the predictions parquet via the lake backend."""
+    if "delay_probability" in df.columns:
+        vals = pd.to_numeric(df["delay_probability"], errors="coerce")
+        if vals.notna().any():
+            return vals.fillna(0.25)
     pq = os.getenv("AEROFLUX_PREDICTIONS")
-    if pq and os.path.exists(pq):
+    if pq:
         try:
-            pr = pd.read_parquet(pq)[["flight_key", "delay_probability"]]
+            from aeroflux_ml import lake_backend_from_env
+            pr = lake_backend_from_env().read_parquet(pq).to_pandas()[["flight_key", "delay_probability"]]
             pmap = dict(zip(pr["flight_key"], pr["delay_probability"]))
             return df["flight_instance_id"].map(pmap).fillna(0.25)
         except Exception:

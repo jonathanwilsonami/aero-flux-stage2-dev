@@ -46,7 +46,7 @@ def write_table(df: pl.DataFrame, path: str) -> str:
 class StateRepository(Protocol):
     def upsert_flight_state(self, record: dict[str, Any]) -> None: ...
     def upsert_prediction(self, prediction: dict[str, Any]) -> None: ...
-    def recent_flight_states(self, hours: int) -> list[dict[str, Any]]: ...
+    def recent_flight_states(self, hours: int, limit: int | None = None) -> list[dict[str, Any]]: ...
 
 
 class InMemoryStateRepository:
@@ -62,8 +62,9 @@ class InMemoryStateRepository:
     def upsert_prediction(self, prediction: dict[str, Any]) -> None:
         self.predictions[prediction["prediction_key"]] = prediction  # idempotent
 
-    def recent_flight_states(self, hours: int) -> list[dict[str, Any]]:
-        return list(self.flights.values())
+    def recent_flight_states(self, hours: int, limit: int | None = None) -> list[dict[str, Any]]:
+        vals = list(self.flights.values())
+        return vals[:limit] if limit else vals
 
 
 class SqliteStateRepository:
@@ -96,8 +97,13 @@ class SqliteStateRepository:
              prediction.get("scored_at"), json.dumps(prediction)))
         self.conn.commit()
 
-    def recent_flight_states(self, hours: int) -> list[dict[str, Any]]:
-        cur = self.conn.execute("SELECT doc FROM flight_state")
+    def recent_flight_states(self, hours: int, limit: int | None = None) -> list[dict[str, Any]]:
+        sql = "SELECT doc FROM flight_state"
+        params: tuple = ()
+        if limit:
+            sql += " LIMIT ?"
+            params = (limit,)
+        cur = self.conn.execute(sql, params)
         return [json.loads(r[0]) for r in cur.fetchall()]
 
 
@@ -177,7 +183,7 @@ class PostgresStateRepository:
                  scored_at=EXCLUDED.scored_at""", prediction)
         conn.commit()
 
-    def recent_flight_states(self, hours: int) -> list[dict[str, Any]]:
+    def recent_flight_states(self, hours: int, limit: int | None = None) -> list[dict[str, Any]]:
         conn = self._connection()
         cols = ",".join(_FLIGHT_INSTANCE_COLS)
         # make_interval(hours => %s), not interval '%s hours' — a bind
@@ -185,9 +191,13 @@ class PostgresStateRepository:
         # psycopg/Postgres silently mis-parse it (verified: always came out
         # as exactly 1 hour regardless of the value passed). make_interval
         # is a real function call, so %s binds normally.
-        cur = conn.execute(
-            f"SELECT {cols} FROM flight_instance "
-            f"WHERE updated_at > now() - make_interval(hours => %s)", (hours,))
+        sql = (f"SELECT {cols} FROM flight_instance "
+               f"WHERE updated_at > now() - make_interval(hours => %s)")
+        params: list[Any] = [hours]
+        if limit:
+            sql += " LIMIT %s"
+            params.append(limit)
+        cur = conn.execute(sql, params)
         names = [d.name for d in cur.description]
         return [dict(zip(names, row)) for row in cur.fetchall()]
 
@@ -297,12 +307,24 @@ class DynamoDBStateRepository:
         attrs = {c: prediction[c] for c in _PREDICTION_ATTRS if c in prediction}
         self._update(flight_key, attrs)
 
-    def recent_flight_states(self, hours: int) -> list[dict[str, Any]]:
+    def recent_flight_states(self, hours: int, limit: int | None = None) -> list[dict[str, Any]]:
         from datetime import datetime, timedelta, timezone
         from boto3.dynamodb.conditions import Attr
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        filter_expr = Attr("updated_at").gt(cutoff)
+        if limit:
+            # Single-page Scan capped at `Limit=limit` items EVALUATED (the
+            # DynamoDB semantics — Limit bounds read cost, not matches, so a
+            # low match rate could return fewer than `limit` rows; that's
+            # the correct trade for "bound the cost/latency hard", which is
+            # the actual goal here, not "guarantee exactly N rows"). No
+            # LastEvaluatedKey pagination when limited — one page only, by
+            # design, so this can never degrade into the full-table scan
+            # it's meant to avoid.
+            resp = self._table.scan(FilterExpression=filter_expr, Limit=limit)
+            return resp.get("Items", [])
         items: list[dict[str, Any]] = []
-        kwargs: dict[str, Any] = {"FilterExpression": Attr("updated_at").gt(cutoff)}
+        kwargs: dict[str, Any] = {"FilterExpression": filter_expr}
         while True:
             resp = self._table.scan(**kwargs)
             items.extend(resp.get("Items", []))
