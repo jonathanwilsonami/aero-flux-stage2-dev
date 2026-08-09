@@ -21,12 +21,15 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 UI_DIR="$ROOT/aeroflux/aeroflux_ui/streamlit_app"
+BUILD_CTX="$ROOT/aeroflux"    # not $UI_DIR — the Dockerfile COPYs in the
+                               # sibling aeroflux_ml package (data_access.py
+                               # imports it), so it has to be in scope
 IMAGE="ghcr.io/jonathanwilsonami/aeroflux-ui"
 
 : "${LIGHTSAIL_SSH_HOST:=}"
 : "${LIGHTSAIL_SSH_USER:=ubuntu}"
 : "${LIGHTSAIL_SSH_KEY_PATH:=}"
-: "${REMOTE_DIR:=/opt/aeroflux}"
+: "${REMOTE_DIR:=/home/ubuntu/aeroflux-app}"
 
 log(){ echo "$(date +%H:%M:%S) | deploy | $*"; }
 die(){ echo "ERROR: $*" >&2; exit 1; }
@@ -39,8 +42,8 @@ need_ssh(){
 ssh_cmd(){ ssh -i "$LIGHTSAIL_SSH_KEY_PATH" -o StrictHostKeyChecking=accept-new "$LIGHTSAIL_SSH_USER@$LIGHTSAIL_SSH_HOST" "$@"; }
 
 cmd_build(){
-  log "building $IMAGE:local from $UI_DIR"
-  docker build -t "$IMAGE:local" "$UI_DIR"
+  log "building $IMAGE:local (context=$BUILD_CTX, dockerfile=$UI_DIR/Dockerfile)"
+  docker build -f "$UI_DIR/Dockerfile" -t "$IMAGE:local" "$BUILD_CTX"
   log "built. run it locally with: docker run --rm -p 8501:8501 $IMAGE:local"
 }
 

@@ -40,7 +40,11 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: aeroflux/aeroflux_ui/streamlit_app
+          # context is aeroflux/, not aeroflux/aeroflux_ui/streamlit_app —
+          # the Dockerfile COPYs in the sibling aeroflux_ml package too
+          # (data_access.py imports it), so it has to be in scope.
+          context: aeroflux
+          file: aeroflux/aeroflux_ui/streamlit_app/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE }}:latest

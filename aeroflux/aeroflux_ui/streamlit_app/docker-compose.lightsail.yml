@@ -13,16 +13,24 @@
 #   docker compose -f docker-compose.lightsail.yml pull
 #   docker compose -f docker-compose.lightsail.yml up -d
 #
-# CHECKPOINT MODE (current): no STATE_BACKEND/LAKE_BACKEND/AEROFLUX_DSN set
-# below -> the app runs in its existing built-in sample-data mode. This
-# proves deploy mechanics (image build, GHCR push, SSH redeploy, Caddy/TLS,
-# DNS) with zero dependency on the cloud data path. Cloud backend env vars
-# get added here once that's wired and verified separately.
+# Cloud backend config lives in a `.env` file next to this compose file on
+# the box (REMOTE_DIR/.env) — STATE_BACKEND, LAKE_BACKEND, AWS_REGION,
+# S3_BUCKET, DYNAMODB_TABLE, and the read-only aeroflux-app
+# AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY (env vars, not an AWS profile —
+# the container has no ~/.aws). That .env is NEVER committed (gitignored,
+# lives only on the box) and NEVER touches the GitHub Action — the Action
+# only builds/pushes the image and (optionally) triggers a redeploy over
+# SSH; it has no AWS credentials of its own. Omit/empty the .env (or leave
+# STATE_BACKEND/LAKE_BACKEND unset in it) to fall back to the existing
+# built-in sample-data mode — same escape hatch as always.
 services:
   app:
     image: ghcr.io/jonathanwilsonami/aeroflux-ui:${IMAGE_TAG:-latest}
     container_name: aeroflux-ui
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "8501:8501"    # direct access — always on, independent of Caddy
     healthcheck:

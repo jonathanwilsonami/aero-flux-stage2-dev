@@ -6,3 +6,9 @@ psycopg[binary]>=3.1
 requests>=2.31
 joblib>=1.3
 xgboost>=2.0
+# below: pulled in transitively by `import aeroflux_ml` (state_backend_from_env /
+# lake_backend_from_env) — polars is a module-level import in aeroflux_ml/io.py,
+# boto3 is used at runtime by DynamoDBStateRepository/S3LakeStore
+polars>=1.0
+boto3
+pyyaml>=6
