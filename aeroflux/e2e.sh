@@ -149,7 +149,32 @@ cmd_health(){
 }
 
 # ---- UP / DOWN -------------------------------------------------------------
+# Two independent, un-torn-down `e2e.sh up` stacks running at once is exactly
+# what caused the sync_cloud KeyError/state-loss bugs (both loops writing to
+# the same log, doubling how often the flight_instance TRUNCATE race hits) —
+# make that impossible to create by accident.
+_running_stage_pids(){
+  local p pid
+  for p in ingest score sync archive ui; do
+    pid=$(cat "$ROOT/out/.${p}_pid" 2>/dev/null || true)
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && echo "$p:$pid"
+  done
+}
 cmd_up(){
+  local running; running="$(_running_stage_pids)"
+  if [ -n "$running" ]; then
+    if [ "${FORCE:-0}" = "1" ]; then
+      log "FORCE=1 set — tearing down the running stack first:"
+      echo "$running" | sed 's/^/  /'
+      cmd_down
+      sleep 2
+    else
+      echo "ERROR: a stack is already running — refusing to start a second one:" >&2
+      echo "$running" | sed 's/^/  /' >&2
+      echo "Run ./e2e.sh down first, then ./e2e.sh up again — or ./e2e.sh up with FORCE=1 to tear down and restart in one step." >&2
+      exit 1
+    fi
+  fi
   [ -f "$MODEL_LINK" ] || cmd_link || cmd_train      # reuse existing model; only train if none
   cmd_ingest; sleep 5; cmd_score; cmd_sync_cloud; cmd_archive; cmd_ui
   log "ALL UP. validate: ./e2e.sh health   stop: ./e2e.sh down"
