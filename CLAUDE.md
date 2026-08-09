@@ -36,6 +36,27 @@ serve on live SWIM, with **train/serve parity by construction**.
    must be on (`WEATHER=1`, now the `run.sh` default) for the 4 wind/IFR
    features to be non-null live — this bit us once (see Gotchas).
 
+## Secrets handling (hard rule)
+**Never print, `cat`, `tail`, `head`, or `echo` the contents of `.env` files or
+any file that may hold credentials** (AWS keys, DSNs with passwords, tokens,
+API secrets) — locally, on the box, anywhere. This includes indirectly, e.g.
+`tail -N` on a `.env` to check the last couple of lines you just added: it
+prints everything else in that range too. This rule exists because it was
+broken once — a `tail -5 .env` on the Lightsail box to confirm two new lines
+landed also printed the real `AWS_SECRET_ACCESS_KEY` into the session
+transcript.
+- To inspect an env file: `grep -v -i 'secret\|password\|key\|token' file` to
+  exclude secret-bearing lines, or `grep '^VAR_NAME='` to check one specific
+  non-secret variable by name.
+- To edit one: write the specific key(s) directly (e.g. a `grep -q ... ||
+  echo "VAR=val" >> .env` guard, matching what `sync_cloud`/deploy tooling
+  already does), or use an interactive editor (`nano`/`vim`) — never a
+  command that echoes the whole file to append/modify it.
+- To confirm a variable is *set* (not its value): test its effect — does the
+  AWS call succeed, does the DB connect — rather than printing it.
+- If a secret is ever exposed in a transcript or log despite this, say so
+  plainly and recommend rotation; don't just quietly move on.
+
 ## Repo map (project dir: `aeroflux/`)
 - `aeroflux_parser/` — SWIM parse → fuse → canonical silver. Key: `fusion`,
   `identity`, `adsb`/`adsb_store` (airframe store), `airports`/`airlines` dims.
