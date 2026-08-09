@@ -1,0 +1,50 @@
+# docker-compose.lightsail.yml — always-on deploy target for the Streamlit
+# app on Lightsail. Runs the pre-built GHCR image
+# (see ../../.github/workflows/deploy-ui.yml for how it gets built/pushed).
+#
+# The app is reachable TWO ways on purpose:
+#   - directly on :8501 (works even if Caddy/TLS/DNS is broken)
+#   - via Caddy on :443 at aeroflux.duckdns.org (automatic Let's Encrypt TLS)
+# Caddy is additive, not a gate. If TLS/DNS is misconfigured, the demo is
+# still reachable directly; `docker compose -f docker-compose.lightsail.yml
+# stop caddy` (or delete the service below) and the app keeps serving.
+#
+# Deploy via ../../deploy.sh, or manually on the Lightsail box:
+#   docker compose -f docker-compose.lightsail.yml pull
+#   docker compose -f docker-compose.lightsail.yml up -d
+#
+# CHECKPOINT MODE (current): no STATE_BACKEND/LAKE_BACKEND/AEROFLUX_DSN set
+# below -> the app runs in its existing built-in sample-data mode. This
+# proves deploy mechanics (image build, GHCR push, SSH redeploy, Caddy/TLS,
+# DNS) with zero dependency on the cloud data path. Cloud backend env vars
+# get added here once that's wired and verified separately.
+services:
+  app:
+    image: ghcr.io/jonathanwilsonami/aeroflux-ui:${IMAGE_TAG:-latest}
+    container_name: aeroflux-ui
+    restart: unless-stopped
+    ports:
+      - "8501:8501"    # direct access — always on, independent of Caddy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: aeroflux-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:
