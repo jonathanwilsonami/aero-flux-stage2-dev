@@ -16,6 +16,8 @@ from .weather import fetch_metar_live, fetch_metar_history
 from .weather import parse_ncei_records
 from .io import (
     write_table, StateRepository, InMemoryStateRepository, SqliteStateRepository,
+    PostgresStateRepository, DynamoDBStateRepository, state_backend_from_env,
+    LakeStore, LocalLakeStore, S3LakeStore, lake_backend_from_env,
 )
 
 __version__ = "0.1.0"
@@ -28,5 +30,7 @@ __all__ = [
     "fetch_metar_live", "fetch_metar_history",
     "parse_ncei_records",
     "write_table", "StateRepository", "InMemoryStateRepository",
-    "SqliteStateRepository",
+    "SqliteStateRepository", "PostgresStateRepository", "DynamoDBStateRepository",
+    "state_backend_from_env",
+    "LakeStore", "LocalLakeStore", "S3LakeStore", "lake_backend_from_env",
 ]

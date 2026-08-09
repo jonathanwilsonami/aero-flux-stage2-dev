@@ -16,6 +16,7 @@ include = ["aeroflux_parser/data/airlines.csv", "aeroflux_parser/data/airports.c
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
+boto3 = "*"
 certifi = "*"
 confluent-kafka = "*"
 fastparquet = "*"

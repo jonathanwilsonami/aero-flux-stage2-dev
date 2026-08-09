@@ -2,10 +2,15 @@
 # AeroFlux end-to-end orchestration: train -> serve (live ingest + score) -> UI.
 # Keep this at the PROJECT ROOT (sibling of run.sh). It orchestrates run.sh.
 #
-#   ./e2e.sh up      # (re)use a trained model + ingest + score + archive + UI
+#   ./e2e.sh up      # (re)use a trained model + ingest + score + sync + archive + UI
 #   ./e2e.sh health  # validate every stage
 #   ./e2e.sh down    # stop everything
-# Stages: train | link | ingest | score | archive | ui
+# Stages: train | link | ingest | score | sync_cloud | archive | ui
+#
+# sync_cloud is a no-op unless you set STATE_BACKEND=dynamodb and/or
+# LAKE_BACKEND=s3 (see aeroflux_ml/io.py / scripts/sync_cloud.sh) — with the
+# defaults (postgres/local) it still runs on schedule but does nothing each
+# cycle, so `./e2e.sh up` behaves exactly as before if you never opt in.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"     # absolute project root, wherever invoked
 cd "$ROOT"
@@ -19,6 +24,8 @@ cd "$ROOT"
 : "${GOLD_ARCHIVE:=$ROOT/out/gold_live}"
 : "${DURATION:=172800}"                   # 48h; 'continuous' loops forever
 : "${SCORE_EVERY:=60}"
+: "${SYNC_EVERY:=300}"                    # matches run.sh's REFRESH_SECONDS default —
+                                           # no point syncing more often than gold refreshes
 : "${UI_PORT:=8501}"
 : "${RUN_DIR_FILE:=$ROOT/out/.current_run_dir}"
 : "${MODEL_LINK:=$ROOT/out/current_model.joblib}"
@@ -76,13 +83,24 @@ cmd_score(){
       --out "$PREDICTIONS" --dsn "$DSN" --loop "$SCORE_EVERY" >>"$LOGS/score.log" 2>&1 ) & echo $! > "$ROOT/out/.score_pid"
 }
 
-# ---- 4. ARCHIVE gold snapshots (hourly) ------------------------------------
+# ---- 4. SYNC to cloud backends (no-op unless STATE_BACKEND/LAKE_BACKEND ----
+#         are set to something other than the local defaults) ---------------
+cmd_sync_cloud(){
+  log "cloud sync loop every ${SYNC_EVERY}s -> STATE_BACKEND=${STATE_BACKEND:-postgres} LAKE_BACKEND=${LAKE_BACKEND:-local} ($LOGS/sync_cloud.log)"
+  ( while true; do
+      GOLD="$GOLD" PREDICTIONS="$PREDICTIONS" DSN="$DSN" "$ROOT/scripts/sync_cloud.sh" >>"$LOGS/sync_cloud.log" 2>&1
+      sleep "$SYNC_EVERY"
+    done ) & echo $! > "$ROOT/out/.sync_pid"
+  log "sync pid $(cat "$ROOT/out/.sync_pid")"
+}
+
+# ---- 5. ARCHIVE gold snapshots (hourly) ------------------------------------
 cmd_archive(){
   ( while true; do [ -f "$GOLD" ] && cp "$GOLD" "$GOLD_ARCHIVE/gold_$(date +%Y%m%d_%H%M).parquet"; sleep 3600; done ) & echo $! > "$ROOT/out/.archive_pid"
   log "gold archiver -> $GOLD_ARCHIVE (hourly)"
 }
 
-# ---- 5. UI -----------------------------------------------------------------
+# ---- 6. UI -----------------------------------------------------------------
 cmd_ui(){
   [ -f "$UI_DIR/app.py" ] || { log "ERROR: no app.py under $UI_DIR (set UI_DIR=...)"; return 1; }
   command -v streamlit >/dev/null || { log "streamlit not installed"; return 1; }
@@ -107,7 +125,7 @@ cmd_health(){
   done
   curl -sf "http://localhost:$UI_PORT/_stcore/health" >/dev/null 2>&1 && echo "ui: UP (:$UI_PORT)" || echo "ui: down"
   echo "--- processes ---"
-  for p in ingest score archive ui; do
+  for p in ingest score sync archive ui; do
     pid=$(cat "$ROOT/out/.${p}_pid" 2>/dev/null || true)
     if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then echo "$p: running ($pid)"; else echo "$p: STOPPED"; fi
   done
@@ -116,11 +134,11 @@ cmd_health(){
 # ---- UP / DOWN -------------------------------------------------------------
 cmd_up(){
   [ -f "$MODEL_LINK" ] || cmd_link || cmd_train      # reuse existing model; only train if none
-  cmd_ingest; sleep 5; cmd_score; cmd_archive; cmd_ui
+  cmd_ingest; sleep 5; cmd_score; cmd_sync_cloud; cmd_archive; cmd_ui
   log "ALL UP. validate: ./e2e.sh health   stop: ./e2e.sh down"
 }
 cmd_down(){
-  for p in ui score archive ingest; do
+  for p in ui archive sync score ingest; do
     pid=$(cat "$ROOT/out/.${p}_pid" 2>/dev/null || true)
     [ -n "${pid:-}" ] && kill "$pid" 2>/dev/null && echo "stopped $p ($pid)"
     rm -f "$ROOT/out/.${p}_pid"
@@ -131,7 +149,8 @@ cmd_down(){
 
 case "${1:-}" in
   train) cmd_train;; link) cmd_link;; ingest) cmd_ingest;; score) cmd_score;;
+  sync_cloud|sync) cmd_sync_cloud;;
   archive) cmd_archive;; ui) cmd_ui;; health|status) cmd_health;;
   up|all) cmd_up;; down|stop) cmd_down;;
-  *) echo "usage: ./e2e.sh {up|health|down | train|link|ingest|score|archive|ui}"; exit 1;;
+  *) echo "usage: ./e2e.sh {up|health|down | train|link|ingest|score|sync_cloud|archive|ui}"; exit 1;;
 esac
