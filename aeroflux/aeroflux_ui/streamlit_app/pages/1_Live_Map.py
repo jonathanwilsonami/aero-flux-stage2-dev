@@ -5,11 +5,20 @@ colored by predicted delay risk, on a US map. No Mapbox token needed.
 """
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from data_access import load_flights
+
+# The real constraint here is the browser's Plotly render, not the box or the
+# DynamoDB read (both measured fast well past this size) — thousands of geo
+# arcs get sluggish client-side regardless of server headroom. Metrics/KPIs
+# below use the full (post-filter) tracked set; only the map trace itself is
+# capped, and capped honestly (labeled), not silently.
+MAP_LIMIT = int(os.getenv("MAP_LIMIT", "1000"))
 
 st.set_page_config(page_title="AeroFlux · Live Map", page_icon="🗺️", layout="wide")
 st.title("🗺️ Live Network Map")
@@ -34,9 +43,9 @@ if carriers:
 if df.empty:
     st.warning("No flights match the current filters."); st.stop()
 
-lines_df = df.head(1500)   # cap lines for performance
+map_df = df.head(MAP_LIMIT)   # only the render is capped — metrics below use full `df`
 lon_seg, lat_seg = [], []
-for _, r in lines_df.iterrows():
+for _, r in map_df.iterrows():
     lon_seg += [r["o_lon"], r["d_lon"], None]
     lat_seg += [r["o_lat"], r["d_lat"], None]
 
@@ -44,13 +53,13 @@ fig = go.Figure()
 fig.add_trace(go.Scattergeo(lon=lon_seg, lat=lat_seg, mode="lines",
     line=dict(width=0.5, color="rgba(120,140,180,0.35)"),
     hoverinfo="skip", showlegend=False))
-fig.add_trace(go.Scattergeo(lon=df["o_lon"], lat=df["o_lat"], mode="markers",
-    marker=dict(size=6, color=df["delay_prob"], colorscale="RdYlGn_r",
+fig.add_trace(go.Scattergeo(lon=map_df["o_lon"], lat=map_df["o_lat"], mode="markers",
+    marker=dict(size=6, color=map_df["delay_prob"], colorscale="RdYlGn_r",
                 cmin=0, cmax=1, showscale=True, colorbar=dict(title="risk"),
                 line=dict(width=0)),
-    text=df["callsign"] + " - " + df["carrier_name"].astype(str) + "<br>"
-         + df["origin"].astype(str) + " -> " + df["destination"].astype(str)
-         + "<br>risk: " + (df["delay_prob"] * 100).round(0).astype(str) + "%",
+    text=map_df["callsign"] + " - " + map_df["carrier_name"].astype(str) + "<br>"
+         + map_df["origin"].astype(str) + " -> " + map_df["destination"].astype(str)
+         + "<br>risk: " + (map_df["delay_prob"] * 100).round(0).astype(str) + "%",
     hoverinfo="text", showlegend=False))
 fig.update_layout(
     geo=dict(scope="north america", projection_type="albers usa",
@@ -60,8 +69,13 @@ fig.update_layout(
     paper_bgcolor="rgba(0,0,0,0)", height=560, margin=dict(l=0, r=0, t=0, b=0))
 st.plotly_chart(fig, use_container_width=True)
 
+if len(df) > len(map_df):
+    st.caption(f"🗺️ Map showing {len(map_df):,} of {len(df):,} tracked flights "
+               f"(a representative subset — raise MAP_LIMIT to show more; "
+               f"metrics below reflect all {len(df):,}).")
+
 l, m, r = st.columns(3)
-l.metric("Flights shown", f"{len(df):,}")
+l.metric("Flights tracked", f"{len(df):,}")
 m.metric("At-risk (>=50%)", f"{int((df['delay_prob'] >= 0.5).sum()):,}")
 r.metric("Airborne", f"{int((df['flight_status'] == 'ACTIVE').sum()):,}")
 st.caption("green low risk -> red high risk. Lines show origin->destination for recent flights.")
