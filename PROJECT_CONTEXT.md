@@ -53,6 +53,18 @@ agent read predictions + current state. FastAPI is the intended front door
 (planned). The agent (Ryan) reads via the data contract in
 `AeroFlux_DataSchemas.md`.
 
+**Cloud deployment (built, live):** all streaming/ML stays on the local
+machine — nothing about the pipeline moved. A `sync_cloud.py` step (no-op
+unless opted into) pushes gold to **S3** and current flight state +
+predictions to **DynamoDB**, through the same `StateRepository`/`LakeStore`
+abstraction (`aeroflux_ml/io.py`) that local Postgres/filesystem already used
+— selected by `STATE_BACKEND`/`LAKE_BACKEND` env vars, so local dev is
+unaffected unless you opt in. An always-on Streamlit container on a Lightsail
+VM (Docker + Caddy for TLS, image built/pushed by GitHub Actions to GHCR)
+reads *only* from S3 + DynamoDB via read-only `aeroflux-app` credentials —
+`data_access.py` now reads through the same factories, not a hardcoded
+`psycopg` connection. Full flow, gotchas, and required secrets: `DEPLOYMENT.md`.
+
 ---
 
 ## 3. Decision log (what we chose and why)
@@ -93,6 +105,33 @@ agent read predictions + current state. FastAPI is the intended front door
 8. **Stores:** Postgres (local hot silver + current state), DynamoDB (cloud
    current state), MinIO/S3 (lake). MongoDB was dropped (it created a 3-way
    inconsistency across text/table/diagram — settle on Postgres + DynamoDB).
+9. **Storage abstraction reuses the existing seam, doesn't fork it.**
+   `aeroflux_ml/io.py` already had a `StateRepository` Protocol
+   (`InMemory`/`Sqlite` implementations) — extended with
+   `PostgresStateRepository` (formalizes what `score_live.py` did inline)
+   and `DynamoDBStateRepository`, plus a matching new `LakeStore` Protocol
+   (`LocalLakeStore`/`S3LakeStore`). Every caller resolves through
+   `state_backend_from_env()`/`lake_backend_from_env()` — no caller
+   branches on which backend is active.
+10. **DynamoDB: one item per `flight_key`, state and prediction as disjoint
+    attribute groups on that item, not separate items.** The table has a
+    single HASH key (no sort key) — `upsert_flight_state`/`upsert_prediction`
+    each `UpdateItem` only their own named attributes, never a full-item
+    `put_item`, so neither can clobber the other regardless of write order.
+    `expires_at` (epoch-seconds `N` — DynamoDB TTL silently ignores any
+    other type) is refreshed by whichever call writes last.
+11. **`recent_flight_states` on DynamoDB is `Scan`+`FilterExpression`, not a
+    GSI `Query` — an explicit demo-scale choice, not the permanent design.**
+    An unbounded Scan took ~32s against the live table; capped with a
+    single-page `Scan(Limit=N)` it's ~1s. The documented scale path is a GSI
+    on `updated_at` if item counts ever justify it.
+12. **Deployment: containers + GitHub Actions, not the old systemd+gunicorn
+    Lightsail setup.** `docker-compose.lightsail.yml` (app + Caddy, app
+    published directly on `:8501` so Caddy/TLS issues can never take the
+    demo down), `.github/workflows/deploy-ui.yml` (build+push to GHCR on
+    every push touching `aeroflux_ui/**`, using the built-in `GITHUB_TOKEN`
+    — no PAT), `deploy.sh` for manual build/push/deploy/rollback. Full
+    gotchas in `DEPLOYMENT.md`.
 
 ---
 
@@ -107,32 +146,51 @@ resolution), `adsb` + `adsb_store` (rolling airframe store), `enrich`,
 `engineer` (feature channels + `FeatureEngineer`), `feature_prep` (fill policy +
 parity set + propagation), `weather` (METAR live/historical + NCEI), `weather_cache`
 (cache-first NCEI + bridge), `bts_source` (BTS fetch/cache/local-discovery),
-`pipeline` + `run` (silver→gold + CLI), `inference`, `io`, `config`,
-`score_live` (live scoring), and **`training/`** (config, data, preprocess,
-validation, models/{base,xgboost,logistic,sparkml,tensorflow-stub}, tune,
-evaluate, compare, registry, runner, cli).
+`pipeline` + `run` (silver→gold + CLI), `inference`, `config`,
+`score_live` (live scoring), `io` (**StateRepository/LakeStore** — Postgres/
+DynamoDB, Local/S3, the cloud storage abstraction), `sync_cloud` (local→cloud
+sync step), and **`training/`** (config, data, preprocess, validation,
+models/{base,xgboost,logistic,sparkml,tensorflow-stub}, tune, evaluate,
+compare, registry, runner, cli).
 
-**Root:** `run.sh` (live ingest), `e2e.sh` (full train→serve→UI), `compose.yaml`
-(Kafka+Postgres), `schema.sql`, `scripts/` (build_bts_gold, build_dataset, …),
-`configs/` (pipeline.yaml, training.yaml), `streamlit_app/`, `tests/` (79 pass).
+**Root:** `run.sh` (live ingest), `e2e.sh` (full train→serve→UI; sync-to-cloud
+stage; refuses to start a duplicate stack), `deploy.sh` (manual Lightsail
+build/push/deploy/rollback), `compose.yaml` (Kafka+Postgres), `schema.sql`,
+`scripts/` (build_bts_gold, build_dataset, sync_cloud.sh,
+smoke_cloud_backends.py, …), `configs/` (pipeline.yaml, training.yaml),
+`aeroflux_ui/streamlit_app/` (Dockerfile, docker-compose.lightsail.yml,
+Caddyfile), `.github/workflows/deploy-ui.yml`, `tests/` (83 pass).
 
 **Docs:** `CLAUDE.md`, this file, `AeroFlux_DataSchemas.md`,
-`AeroFlux_DataDictionary.md`, `E2E_RUNBOOK.md`, `RUNGUIDE.md`, `CLOUD.md`.
+`AeroFlux_DataDictionary.md`, `DEPLOYMENT.md`, `E2E_RUNBOOK.md`, `RUNGUIDE.md`,
+`CLOUD.md`.
 
 ---
 
 ## 5. Current state
 
-- **79 tests passing** across parse, ML, and training.
+- **83 tests passing** across parse, ML, and training.
 - **Live coverage** (grows with poller uptime): hex ~38%, GUFI ~49%, tail ~52%,
   aircraft_type ~72%, airline-resolved ~78%. Rotation features live.
 - **Weather** validated both ways: live METAR (thousands of obs/run) and cached
-  NCEI historical (97–100% feature coverage on training gold).
+  NCEI historical (97–100% feature coverage on training gold). Live pipeline's
+  weather channel is on by default (`WEATHER=1` in `run.sh`) — the deployed
+  model's 18 default features include `wind_kt`/`ifr` (present both sides);
+  `temp_c`/`ceiling_ft`/`vis_mi` stay opt-in (`include_gap_weather=True`,
+  null in live METAR regardless).
 - **BTS↔live parity** proven: one BTS gold + one live gold, same schema, features
   computed by the same core.
 - **Training** works: baseline logistic vs XGBoost, time-aware split/CV, grid
   tuning, run registry with metrics/plots/artifacts.
 - **Live scoring + E2E orchestration + demo UI** built and wired.
+- **Cloud deployment live**: gold → S3, current state + predictions →
+  DynamoDB (`sync_cloud.py`, no-op unless opted in via
+  `STATE_BACKEND`/`LAKE_BACKEND`), `data_access.py` reads through the same
+  factories the local path uses. Always-on Streamlit app on Lightsail
+  (Docker + Caddy, GHCR via GitHub Actions) confirmed serving real synced
+  data at `https://aeroflux.duckdns.org` — `mode: LIVE`, `~1s` read latency
+  after the DynamoDB Scan-cost fix (was ~32s unbounded). Full flow and every
+  gotcha hit getting there: `DEPLOYMENT.md`.
 
 ### Known limitations (state honestly; don't try to "fix" the inherent ones)
 - Live rotation is bounded by ADS-B hex coverage (~38%) — not fixable in code;
@@ -166,26 +224,40 @@ evaluate, compare, registry, runner, cli).
 
 ## 6. Roadmap (next work — good for Claude Code)
 
-1. **Sync `git main`.** During rapid iteration, deliverables were applied locally
-   from zips faster than they were pushed. Before anything else, confirm main
-   contains: `airports.py`/`data/airports.csv`, tz-aware `schema.py`, weather
-   parity + `weather_cache.py`, `bts_source.py` (with local-CSV discovery),
-   `feature_prep.py`, `score_live.py`, the whole `training/` subpackage,
-   `configs/training.yaml`, `e2e.sh`, and the docs. A fresh clone must run.
-2. **Build the real 10-year gold** from cached BTS + NCEI weather; produce
-   `bts_out/bts_2015_2025.parquet`.
-3. **Train + tune** the real model (`training.cli tune`); confirm XGBoost beats
-   the logistic baseline on real data (expect realistic AUC ~0.65–0.75, not the
-   ~0.99 seen on synthetic).
-4. **Run `./e2e.sh up`** on the real box; validate with `./e2e.sh health`; soak 48h.
-5. **Agent integration** (Ryan): wire the RAG/LangGraph analyst against the data
-   contract; connect the Streamlit Analyst page via `AEROFLUX_AGENT_URL`.
-6. **Proposal polish:** note the NCEI-historical/METAR-live source split; settle
-   the Postgres+DynamoDB story (drop MongoDB); condense Methodology to the
-   big-data architecture; add data-source citations.
-7. **Later (out of 2-week scope):** cloud migration (RDS/S3/DynamoDB/MSK/EMR),
-   TAF forecasts for destination weather, TensorFlow model, full Spark path,
-   airframe-graph cascade simulation.
+**Done** (was the roadmap; now history): `git main` synced; cloud storage
+abstraction (`io.py` StateRepository/LakeStore, Postgres/DynamoDB +
+Local/S3); `sync_cloud.py`; `data_access.py` reading through the same
+factories; Lightsail deployment (Docker + Caddy + GHCR CI, `deploy.sh`,
+duplicate-stack guard). See `DEPLOYMENT.md` for the deploy flow and every
+gotcha hit getting there.
+
+**Open:**
+1. **Evaluation work** (current focus) — see `notes/next.qmd`.
+2. **Spark batch analytics job** — the original AWS-storage plan's item 4
+   (containerized PySpark reading gold from the LakeStore, delay-rate/mean-
+   risk aggregations by route/carrier/hour, written back as an `analytics/`
+   table) was never built. `training/models/sparkml_model.py` and
+   `spark/streaming_job.py` (scaffold) exist but neither is this.
+3. **`AGENT_INTEGRATION.md`** — the original plan's item 7 (a short doc for
+   Ryan's RAG agent: read path via S3 gold + DynamoDB current-state
+   per `AeroFlux_DataSchemas.md`, the `AEROFLUX_AGENT_URL` contract already
+   implemented in `pages/2_Analyst.py`, and the "agent owns its own
+   vector store + LLM calls, no shared compute" boundary) — not written yet.
+4. **Distribution-shift skew** (see Known Limitations above) — none of the
+   three candidate fixes implemented.
+5. **Train + tune the real model** (`training.cli tune`) on the full 10-year
+   gold if not already done; confirm XGBoost beats the logistic baseline on
+   real data.
+6. **Agent integration** (Ryan): wire the RAG/LangGraph analyst against the
+   data contract once `AGENT_INTEGRATION.md` exists.
+7. **Proposal polish:** note the NCEI-historical/METAR-live source split;
+   settle the Postgres+DynamoDB story (drop MongoDB); condense Methodology
+   to the big-data architecture; add data-source citations.
+8. **Later (out of 2-week scope):** RDS/MSK/EMR if the local pipeline itself
+   needs to move off this machine (currently only storage/serving moved —
+   streaming/ML stays local by design); TAF forecasts for destination
+   weather; TensorFlow model; full Spark streaming path; airframe-graph
+   cascade simulation.
 
 ---
 
