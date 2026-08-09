@@ -80,12 +80,44 @@ def score_once(gold_path: str, model_path: str, model_version: str,
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     preds.write_parquet(out_path)
+    snap_path = _maybe_write_snapshot(preds, out_path)
     if dsn:
         _upsert_postgres(preds, dsn)
     n_risk = int((preds["predicted_delayed"] == 1).sum())
-    print(f"  scored {preds.height} flights → {out_path} "
-          f"({n_risk} at risk, {100*n_risk/preds.height:.0f}%)")
+    msg = (f"  scored {preds.height} flights → {out_path} "
+           f"({n_risk} at risk, {100*n_risk/preds.height:.0f}%)")
+    if snap_path:
+        msg += f" [+ snapshot {snap_path}]"
+    print(msg)
     return preds.height
+
+
+def _maybe_write_snapshot(preds: pl.DataFrame, out_path: str) -> str | None:
+    """Append a timestamped predictions snapshot, mirroring `cmd_archive`'s
+    hourly `gold_live/gold_YYYYMMDD_HHMM.parquet` snapshots in e2e.sh.
+
+    `predictions.parquet` (above) is overwritten every scoring cycle, so it
+    only ever holds the current state — there's no way to later ask "what
+    did we predict for this flight hours ago?". These snapshots preserve
+    that history so live predictions can eventually be paired against a
+    later gold_live snapshot's now-populated `arr_delay_min` for the same
+    flight_key (earlier-prediction-to-later-outcome only — see
+    PROJECT_CONTEXT.md's live-evaluation notes).
+
+    Throttled to ~1/hour (like the gold archiver) regardless of --loop
+    cadence, so this stays lightweight (~200KB/snapshot) even scoring every
+    60s. Returns the written path, or None if this hour was already
+    snapshotted.
+    """
+    snap_dir = Path(out_path).parent / "predictions"
+    now = datetime.now()
+    hour_prefix = f"predictions_{now:%Y%m%d_%H}"
+    if snap_dir.exists() and any(snap_dir.glob(f"{hour_prefix}*.parquet")):
+        return None
+    snap_dir.mkdir(parents=True, exist_ok=True)
+    snap_path = snap_dir / f"{hour_prefix}{now:%M}.parquet"
+    preds.write_parquet(snap_path)
+    return str(snap_path)
 
 
 def _upsert_postgres(preds: pl.DataFrame, dsn: str) -> None:
