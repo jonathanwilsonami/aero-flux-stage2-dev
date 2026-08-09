@@ -87,19 +87,24 @@ cmd_score(){
 #         are set to something other than the local defaults) ---------------
 cmd_sync_cloud(){
   log "cloud sync loop every ${SYNC_EVERY}s -> STATE_BACKEND=${STATE_BACKEND:-postgres} LAKE_BACKEND=${LAKE_BACKEND:-local} ($LOGS/sync_cloud.log)"
-  # Explicit passthrough, not implicit inheritance — every cloud var the
-  # backends might need, named here, so a real "this loop's config is
-  # incomplete" bug shows up in ONE place instead of as an intermittent
-  # KeyError however-many minutes later. ${VAR:-} defaults keep `set -u`
-  # from erroring on ones you haven't set (sync_cloud.sh/io.py fail loud
-  # with a clear message if a required one is actually missing).
+  # Explicitly export (not force-set) every cloud var the backends might
+  # need, so it's obvious in one place what this loop depends on, instead
+  # of relying on "whatever happened to be inherited." Deliberately NOT
+  # `VAR="${VAR:-}"` on the subprocess command line — that sets an EXPLICIT
+  # empty string for anything unset, which is not the same as leaving it
+  # unset: os.getenv("X", default) only falls back to `default` when X is
+  # truly absent, not when it's "". An empty DYNAMODB_TTL_HOURS broke
+  # `int(os.getenv(...))` outright (ValueError) the first time this ran —
+  # caught by actually running the loop, not assumed fixed. `export "$v"`
+  # on an already-set variable is a safe no-op; skipped entirely if unset,
+  # so downstream defaults (region, table name, ttl hours, backend choice)
+  # still apply correctly.
+  for v in STATE_BACKEND LAKE_BACKEND AWS_REGION AWS_PROFILE S3_BUCKET S3_PREFIX \
+           DYNAMODB_TABLE DYNAMODB_TTL_HOURS AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+    [ -n "${!v:-}" ] && export "$v"
+  done
   ( while true; do
       GOLD="$GOLD" PREDICTIONS="$PREDICTIONS" DSN="$DSN" \
-      STATE_BACKEND="${STATE_BACKEND:-}" LAKE_BACKEND="${LAKE_BACKEND:-}" \
-      AWS_REGION="${AWS_REGION:-}" AWS_PROFILE="${AWS_PROFILE:-}" \
-      S3_BUCKET="${S3_BUCKET:-}" S3_PREFIX="${S3_PREFIX:-}" \
-      DYNAMODB_TABLE="${DYNAMODB_TABLE:-}" DYNAMODB_TTL_HOURS="${DYNAMODB_TTL_HOURS:-}" \
-      AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
       "$ROOT/scripts/sync_cloud.sh" >>"$LOGS/sync_cloud.log" 2>&1
       sleep "$SYNC_EVERY"
     done ) & echo $! > "$ROOT/out/.sync_pid"
