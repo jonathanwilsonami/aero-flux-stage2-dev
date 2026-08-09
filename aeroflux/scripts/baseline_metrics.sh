@@ -15,6 +15,13 @@
 # — just override DSN/GOLD/PREDICTIONS/PYTHON in the environment if AWS uses
 # different ones.
 #
+# Also captures cloud storage + records (S3 + DynamoDB, via the
+# aeroflux-local AWS profile) alongside local storage in one table —
+# queried directly, independent of this host's own STATE_BACKEND/
+# LAKE_BACKEND, so it's backend-aware: works run from the local dev box or
+# the Lightsail app box. Override AWS_PROFILE/AWS_REGION/S3_BUCKET/
+# DYNAMODB_TABLE/RECENT_HOURS in the environment if yours differ.
+#
 # Resilience: one metric failing (DB unreachable, file missing, etc.) never
 # aborts the run — that section notes what it couldn't capture and the script
 # continues to the next one.
@@ -34,6 +41,15 @@ cd "$ROOT"
 : "${COMPOSE_FILE:=$ROOT/compose.yaml}"
 : "${PYTHON:=python3}"
 
+# ---- cloud config — queried directly regardless of this host's own
+# STATE_BACKEND/LAKE_BACKEND, so the section works run from either the local
+# dev box or the Lightsail app box (same names/defaults as sync_cloud.sh) ----
+: "${AWS_PROFILE:=aeroflux-local}"
+: "${AWS_REGION:=us-east-1}"
+: "${S3_BUCKET:=aeroflux-lake-411750981882-us-east-1-an}"
+: "${DYNAMODB_TABLE:=aeroflux-current-state}"
+: "${RECENT_HOURS:=2}"   # same default as aeroflux_ui/streamlit_app/data_access.py
+
 TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
 TS_HUMAN="$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
 OUT_DIR="$ROOT/out/metrics"
@@ -49,6 +65,10 @@ fi
 py_ok=0
 if command -v "$PYTHON" >/dev/null 2>&1 && "$PYTHON" -c "import polars" >/dev/null 2>&1; then
   py_ok=1
+fi
+aws_ok=0
+if command -v aws >/dev/null 2>&1 && AWS_PROFILE="$AWS_PROFILE" aws sts get-caller-identity >/dev/null 2>&1; then
+  aws_ok=1
 fi
 psql1(){ psql "$DSN" -tAc "$1" 2>/dev/null; }
 
@@ -361,6 +381,175 @@ section_resources(){
 }
 
 # ============================================================================
+section_cloud_storage(){
+  write "## Cloud Storage + Records"
+  blank
+  write "Queried directly against S3/DynamoDB via the \`${AWS_PROFILE}\` AWS"
+  write "profile, independent of this host's own \`STATE_BACKEND\`/"
+  write "\`LAKE_BACKEND\` — so this section captures the same cloud numbers"
+  write "whether the script is run from the local dev box or the Lightsail"
+  write "app box."
+  blank
+  write "| Metric | Value | Unit | Source | Notes |"
+  write "|---|---|---|---|---|"
+
+  # ---- S3 -------------------------------------------------------------
+  if [ "$aws_ok" -eq 1 ]; then
+    s3_total="$(AWS_PROFILE="$AWS_PROFILE" aws s3 ls "s3://${S3_BUCKET}/" --recursive --summarize 2>/dev/null | tail -2)"
+    if [ -n "$s3_total" ]; then
+      obj_n="$(printf '%s\n' "$s3_total" | awk -F': ' '/Total Objects/{print $2}')"
+      size_b="$(printf '%s\n' "$s3_total" | awk -F': ' '/Total Size/{print $2}')"
+      size_mb="$(awk -v b="${size_b:-0}" 'BEGIN{printf "%.2f", b/1048576}')"
+      write "| S3 total size | ${size_mb} | MB | cloud | bucket \`${S3_BUCKET}\` |"
+      write "| S3 total objects | ${obj_n:-0} | count | cloud | bucket \`${S3_BUCKET}\` |"
+
+      # Per-prefix breakdown — discovered from the bucket, not assumed. As of
+      # this writing the lake only actually has gold/ and meta/ (LakeStore
+      # syncs the gold feature table + a sync-status marker); no bronze/
+      # silver/analytics prefixes exist yet, so this reports what's real
+      # rather than a guessed layout.
+      prefixes="$(AWS_PROFILE="$AWS_PROFILE" aws s3api list-objects-v2 --bucket "$S3_BUCKET" --delimiter / --query 'CommonPrefixes[].Prefix' --output text 2>/dev/null)"
+      if [ -n "$prefixes" ]; then
+        for p in $prefixes; do
+          p_stats="$(AWS_PROFILE="$AWS_PROFILE" aws s3 ls "s3://${S3_BUCKET}/${p}" --recursive --summarize 2>/dev/null | tail -2)"
+          p_obj="$(printf '%s\n' "$p_stats" | awk -F': ' '/Total Objects/{print $2}')"
+          p_size="$(printf '%s\n' "$p_stats" | awk -F': ' '/Total Size/{print $2}')"
+          p_size_mb="$(awk -v b="${p_size:-0}" 'BEGIN{printf "%.2f", b/1048576}')"
+          write "| S3 \`${p}\` prefix | ${p_size_mb} | MB | cloud | ${p_obj:-0} objects |"
+        done
+      fi
+    else
+      write "| S3 | _unreachable or empty_ | | cloud | bucket \`${S3_BUCKET}\` |"
+    fi
+  else
+    write "| S3 | _not captured_ | | cloud | \`aws\` CLI unavailable or \`${AWS_PROFILE}\` profile/credentials didn't authenticate |"
+  fi
+
+  # ---- DynamoDB ---------------------------------------------------------
+  if [ "$aws_ok" -eq 1 ]; then
+    dd_desc="$(AWS_PROFILE="$AWS_PROFILE" aws dynamodb describe-table --table-name "$DYNAMODB_TABLE" --query 'Table.[ItemCount,TableSizeBytes]' --output text 2>/dev/null)"
+    if [ -n "$dd_desc" ]; then
+      read -r dd_items dd_bytes <<< "$dd_desc"
+      dd_mb="$(awk -v b="${dd_bytes:-0}" 'BEGIN{printf "%.2f", b/1048576}')"
+      write "| DynamoDB ItemCount (approx) | ${dd_items:-0} | count | cloud | \`describe-table\`'s cached estimate — AWS only refreshes this ~every 6h |"
+      write "| DynamoDB TableSizeBytes (approx) | ${dd_mb} | MB | cloud | same caveat |"
+    else
+      write "| DynamoDB describe-table | _unreachable_ | | cloud | table \`${DYNAMODB_TABLE}\` |"
+    fi
+    if [ "$py_ok" -eq 1 ]; then
+      dd_block="$(AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" DYNAMODB_TABLE="$DYNAMODB_TABLE" \
+                  STATE_BACKEND=dynamodb RECENT_HOURS="$RECENT_HOURS" "$PYTHON" - <<'PYEOF'
+import os, time
+from datetime import datetime, timezone, timedelta
+import boto3
+
+table_name = os.environ["DYNAMODB_TABLE"]
+region = os.environ.get("AWS_REGION", "us-east-1")
+recent_hours = float(os.environ.get("RECENT_HOURS", "2"))
+
+client = boto3.client("dynamodb", region_name=region)
+t0 = time.time()
+exact = 0
+for page in client.get_paginator("scan").paginate(TableName=table_name, Select="COUNT"):
+    exact += page["Count"]
+print(f"EXACT|{exact}|{time.time()-t0:.1f}")
+
+# Active-flight count — mirrors aeroflux_ui/streamlit_app/data_access.py's
+# current_flights()/_current_mask(): flight_status == ACTIVE (ground truth)
+# OR within recent_hours of scheduled/actual departure or arrival. Keep in
+# sync if that logic changes — duplicated here (not imported) because that
+# module pulls in streamlit, which this script's python env has no need for.
+from aeroflux_ml import state_backend_from_env
+rows = state_backend_from_env().recent_flight_states(hours=48, limit=5000)
+
+def parse(ts):
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+now = datetime.now(timezone.utc)
+window = timedelta(hours=recent_hours)
+active = 0
+for r in rows:
+    if r.get("flight_status") == "ACTIVE":
+        active += 1; continue
+    sd = parse(r.get("scheduled_gate_departure"))
+    if sd is not None and abs(now - sd) <= window:
+        active += 1; continue
+    ao = parse(r.get("actual_off"))
+    if ao is not None and timedelta(0) <= (now - ao) <= window:
+        active += 1; continue
+    an = parse(r.get("actual_on"))
+    if an is not None and timedelta(0) <= (now - an) <= window:
+        active += 1; continue
+print(f"TRACKED|{len(rows)}")
+print(f"ACTIVE|{active}")
+PYEOF
+)"
+      exact_line="$(printf '%s\n' "$dd_block" | grep '^EXACT|' || true)"
+      tracked_line="$(printf '%s\n' "$dd_block" | grep '^TRACKED|' || true)"
+      active_line="$(printf '%s\n' "$dd_block" | grep '^ACTIVE|' || true)"
+      if [ -n "$exact_line" ]; then
+        IFS='|' read -r _ exact_n exact_s <<< "$exact_line"
+        write "| DynamoDB exact item count | ${exact_n:-0} | count | cloud | full \`Select=COUNT\` paginated scan, took ${exact_s:-?}s |"
+      fi
+      if [ -n "$tracked_line" ] && [ -n "$active_line" ]; then
+        tracked_n="${tracked_line#TRACKED|}"
+        active_n="${active_line#ACTIVE|}"
+        pct="$(awk -v a="${active_n:-0}" -v b="${tracked_n:-1}" 'BEGIN{printf "%.0f", (b>0)?100*a/b:0}')"
+        write "| DynamoDB tracked (48h window, capped) | ${tracked_n:-0} | count | cloud | matches the app's \`FLIGHTS_LIMIT\` cap |"
+        write "| DynamoDB active-now (status/recency filtered) | ${active_n:-0} | count | cloud | ${pct}% of tracked — \`RECENT_HOURS=${RECENT_HOURS}\`, mirrors \`current_flights()\` |"
+      fi
+    else
+      write "| DynamoDB exact/active-now counts | _not captured_ | | cloud | \`${PYTHON}\` or its deps unavailable |"
+    fi
+  else
+    write "| DynamoDB | _not captured_ | | cloud | \`aws\` CLI unavailable or \`${AWS_PROFILE}\` profile/credentials didn't authenticate |"
+  fi
+
+  # ---- Local storage ------------------------------------------------------
+  out_size="$(du -sh "$ROOT/out" 2>/dev/null | awk '{print $1}')"
+  write "| Local \`out/\` directory | ${out_size:-N/A} | du -h | local | includes gold, predictions, gold_live, eval |"
+  if [ -d "$ROOT/out/gold_live" ]; then
+    gl_size="$(du -sh "$ROOT/out/gold_live" 2>/dev/null | awk '{print $1}')"
+    write "| Local \`out/gold_live/\` | ${gl_size:-N/A} | du -h | local | hourly gold snapshots |"
+  fi
+  if [ -d "$ROOT/out/predictions" ]; then
+    pr_size="$(du -sh "$ROOT/out/predictions" 2>/dev/null | awk '{print $1}')"
+    write "| Local \`out/predictions/\` | ${pr_size:-N/A} | du -h | local | hourly prediction snapshots |"
+  fi
+  if [ "$pg_ok" -eq 1 ]; then
+    db_bytes="$(psql1 "SELECT pg_database_size(current_database());")"
+    db_mb="$(awk -v b="${db_bytes:-0}" 'BEGIN{printf "%.2f", b/1048576}')"
+    write "| Postgres database size | ${db_mb} | MB | local | \`pg_database_size(current_database())\` |"
+  else
+    write "| Postgres database size | _not captured_ | | local | Postgres unreachable at \`${DSN}\` |"
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    while IFS='|' read -r dtype dsize dreclaim; do
+      [ -n "$dtype" ] || continue
+      write "| Docker ${dtype} | ${dsize} | docker system df | local | reclaimable: ${dreclaim} |"
+    done < <(docker system df --format '{{.Type}}|{{.Size}}|{{.Reclaimable}}' 2>/dev/null)
+  else
+    write "| Docker system df | _not captured_ | | local | docker unavailable |"
+  fi
+
+  blank
+  write "_What this means: cloud storage volume (S3 lake size, DynamoDB item"
+  write "count/size) alongside local disk footprint, in one table so growth"
+  write "can be tracked over time regardless of which backend a given run is"
+  write "against. \"DynamoDB active-now\" is the number that actually matters"
+  write "for \"is the map showing something reasonable\" — it should be a"
+  write "meaningful fraction of \"tracked,\" not a token few percent; see"
+  write "\`aeroflux_ui/streamlit_app/data_access.py\`'s \`current_flights()\`._"
+  hr
+}
+
+# ============================================================================
 main(){
   section_header
   section_airframe
@@ -369,6 +558,7 @@ main(){
   section_fusion
   section_predictions
   section_resources
+  section_cloud_storage
   write "_Report generated by \`scripts/baseline_metrics.sh ${ENV_LABEL}\` at ${TS_HUMAN}._"
 
   echo "Baseline report written: $REPORT"
