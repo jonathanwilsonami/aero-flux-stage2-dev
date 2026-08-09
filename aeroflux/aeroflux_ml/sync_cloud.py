@@ -84,6 +84,20 @@ def sync_once(*, gold_path: str, predictions_path: str, dsn: str,
     # whichever backend we're writing *to*).
     source = PostgresStateRepository(dsn)
     rows = source.recent_flight_states(hours=state_hours)
+    if not rows and summary["gold_rows"] > 0:
+        # gold (a file snapshot from the last successful pipeline cycle)
+        # says there's real current data, but the live Postgres query came
+        # back empty — almost certainly landed inside run.sh's
+        # TRUNCATE-then-reload window for flight_instance, not a genuine
+        # "no flights" state. Reporting `done` here would silently advance
+        # synced_at past a sync that wrote zero state rows to the state
+        # backend — a real data-loss bug, not a quiet no-op. Fail loud; the
+        # next cycle (SYNC_EVERY later) retries against a stable table.
+        raise RuntimeError(
+            f"recent_flight_states() returned 0 rows but gold_rows="
+            f"{summary['gold_rows']} (a real recent pipeline snapshot) — "
+            f"likely raced run.sh's flight_instance TRUNCATE+reload. "
+            f"Refusing to report this cycle as done.")
     summary["state_rows"] = _upsert_all(state.upsert_flight_state, rows)
 
     if os.path.exists(predictions_path):

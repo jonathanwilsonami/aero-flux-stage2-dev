@@ -334,6 +334,21 @@ class DynamoDBStateRepository:
         return items
 
 
+def _require_env(name: str, *, context: str) -> str:
+    """A bare `os.environ[name]` raises a bare `KeyError: 'NAME'` with no
+    indication of WHICH backend needed it or why — indistinguishable from a
+    typo three stack frames away. Fail loud, once, with an actionable
+    message instead."""
+    val = os.getenv(name)
+    if not val:
+        raise RuntimeError(
+            f"{context} requires ${name} to be set, but it's unset or empty "
+            f"in this process's environment. If this is a loop invoking a "
+            f"subprocess, confirm the loop actually passes {name} through "
+            f"(don't rely on implicit inheritance) rather than assuming it.")
+    return val
+
+
 def state_backend_from_env() -> StateRepository:
     """The one place callers ask for "the current state backend" — reads
     `STATE_BACKEND` (default `postgres`) plus the matching connection info,
@@ -342,7 +357,7 @@ def state_backend_from_env() -> StateRepository:
     the backend themselves."""
     backend = os.getenv("STATE_BACKEND", "postgres").lower()
     if backend == "postgres":
-        dsn = os.environ["DSN"]
+        dsn = _require_env("DSN", context="STATE_BACKEND=postgres")
         return PostgresStateRepository(dsn)
     if backend == "dynamodb":
         table = os.getenv("DYNAMODB_TABLE", "aeroflux-current-state")
@@ -453,7 +468,7 @@ def lake_backend_from_env() -> LakeStore:
     if backend == "local":
         return LocalLakeStore(os.getenv("LAKE_LOCAL_DIR", "out"))
     if backend == "s3":
-        bucket = os.environ["S3_BUCKET"]
+        bucket = _require_env("S3_BUCKET", context="LAKE_BACKEND=s3")
         prefix = os.getenv("S3_PREFIX", "")
         region = os.getenv("AWS_REGION", "us-east-1")
         return S3LakeStore(bucket, prefix, region)
