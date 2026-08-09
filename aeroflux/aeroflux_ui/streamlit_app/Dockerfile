@@ -9,6 +9,13 @@ WORKDIR /app
 COPY aeroflux_ui/streamlit_app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY aeroflux_ml ./aeroflux_ml
+# data_access.py's _airport_coords() looks for this to place every airport
+# on the map (28,427 ICAO codes), falling back to a bundled 24-hub list if
+# it's missing — which it silently was, every deploy until now: this file
+# was never in the build context, so the deployed app only ever knew 24
+# airports' coordinates and dropped every flight whose origin/destination
+# wasn't one of them.
+COPY aeroflux_parser/data/airports.csv ./aeroflux_parser/data/airports.csv
 COPY aeroflux_ui/streamlit_app .
 EXPOSE 8501
 # AEROFLUX_DSN / AEROFLUX_AGENT_URL are optional (sample data if unset)

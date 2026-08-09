@@ -102,8 +102,17 @@ _STATE_DISPLAY_COLS = [
 ]
 
 
-_FLIGHTS_LIMIT = 4000  # mirrors the old SQL's LIMIT 4000 — the map only ever shows a few
-                       # thousand at once, and on DynamoDB this bounds Scan cost directly
+FLIGHTS_LIMIT = int(os.getenv("FLIGHTS_LIMIT", "5000"))
+# Tunable without a redeploy. Measured on the Lightsail box (2026-08-09):
+# the real 48h-active set is ~1,653 items (DynamoDB's raw ItemCount is much
+# larger — ~158k — but that counts everything not yet TTL-swept, not what's
+# actually active; the Scan's `updated_at` filter is what matters). Scan
+# latency was flat at ~0.4-0.5s from limit=2000 up through 16000, so 5000
+# gives headroom over today's active set without any measured cost. Recall
+# DynamoDBStateRepository.recent_flight_states: `Limit` bounds items
+# EVALUATED per the single-page Scan, not items MATCHED — if the active set
+# ever outgrows this, raise it; don't assume a returned count == the true
+# active count without checking (see recent_flight_states's own comment).
 
 # 300s, not 30s: sync_cloud only refreshes the cloud backends every SYNC_EVERY
 # (default 300s), so re-querying every 30s was pure wasted read cost/latency
@@ -126,7 +135,7 @@ def _load_flights_backend() -> pd.DataFrame:
     from aeroflux_ml import state_backend_from_env
     repo = state_backend_from_env()
     hours = int(os.getenv("STATE_HOURS", "48"))
-    rows = repo.recent_flight_states(hours=hours, limit=_FLIGHTS_LIMIT)
+    rows = repo.recent_flight_states(hours=hours, limit=FLIGHTS_LIMIT)
     if not rows:
         raise RuntimeError("backend returned zero flight states")
     df = pd.DataFrame(rows)
@@ -139,8 +148,11 @@ def _load_flights_backend() -> pd.DataFrame:
     for c in _STATE_DISPLAY_COLS:
         if c not in df.columns:
             df[c] = None
-    df = (df[df["origin"].notna() & df["destination"].notna()]
-          .head(4000).reset_index(drop=True))  # same cap the old SQL's LIMIT 4000 had
+    # No second .head() cap here on purpose — recent_flight_states(limit=FLIGHTS_LIMIT)
+    # above already bounds the row count at the source; re-capping here used to
+    # silently override FLIGHTS_LIMIT with a stale hardcoded 4000 regardless of
+    # what was configured.
+    df = df[df["origin"].notna() & df["destination"].notna()].reset_index(drop=True)
     df = _attach_coords(df)
     df["delay_prob"] = _try_predictions_backend(df)
     return df.dropna(subset=["o_lat", "d_lat"])
@@ -176,7 +188,9 @@ def _airport_coords() -> dict:
     # look for airports.csv relative to the repo (adjust if your layout differs)
     here = os.path.dirname(os.path.abspath(__file__))
     candidates = [
-        os.path.join(here, "..", "..", "aeroflux_parser", "data", "airports.csv"),
+        os.path.join(here, "..", "..", "aeroflux_parser", "data", "airports.csv"),  # local dev checkout
+        os.path.join(here, "aeroflux_parser", "data", "airports.csv"),  # Docker image (WORKDIR /app is flat,
+                                                                          # can't go two levels up — see Dockerfile)
         os.path.join(here, "airports.csv"),
     ]
     for path in candidates:
