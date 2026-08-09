@@ -119,15 +119,71 @@ FLIGHTS_LIMIT = int(os.getenv("FLIGHTS_LIMIT", "5000"))
 # for data that hadn't changed. Aligned to the actual write cadence.
 @st.cache_data(ttl=300)
 def load_flights() -> pd.DataFrame:
-    """Current flights with origin/dest coords + a delay probability. Live
-    from the configured StateStore — Postgres (AEROFLUX_DSN) by default, or
-    DynamoDB when STATE_BACKEND=dynamodb — if reachable, else sample."""
+    """The full tracked set (up to FLIGHTS_LIMIT, within STATE_HOURS) with
+    origin/dest coords + a delay probability. Live from the configured
+    StateStore — Postgres (AEROFLUX_DSN) by default, or DynamoDB when
+    STATE_BACKEND=dynamodb — if reachable, else sample. This mixes flights
+    at every stage of their lifecycle (planned, airborne, landed hours ago)
+    — use `current_flights()` for "what's happening right now"."""
     if is_live():
         try:
             return _load_flights_backend()
         except Exception as e:  # fall back so the demo never dies
             st.warning(f"Live backend unavailable ({e}); showing sample data.")
     return _merge_live_predictions(_sample_flights())
+
+
+RECENT_HOURS = float(os.getenv("RECENT_HOURS", "2"))
+# Tunable without a redeploy (same .env pattern as FLIGHTS_LIMIT/MAP_LIMIT).
+#
+# Deliberately NOT a filter on the backend's `updated_at` (when the
+# state/prediction item was last upserted) — measured live on the box
+# (2026-08-09) that updated_at does NOT track real flight activity: median
+# age was ~810min (13.5h) for ACTIVE and PLANNED items alike (most are
+# untouched leftovers riding out their DynamoDB TTL, not fresh syncs),
+# while COMPLETED items looked freshest (one final write on landing).
+# Filtering on updated_at recency alone actually made the airborne share
+# *worse* in testing (91 ACTIVE of 1655 total -> only 28 of 733 within a
+# 1-6h updated_at window, flat regardless of the window size — a hard
+# cliff, not a gradual decay).
+#
+# Instead this filters on the flight's own lifecycle timestamps: is it
+# airborne right now (flight_status, the one reliable ground-truth field),
+# or near its scheduled/actual departure or arrival. Measured on the box:
+# recent_hours=2 -> 183 flights, 93 ACTIVE (51%) — vs. 91 of 1,655 (5%)
+# with no filter at all.
+def _current_mask(df: pd.DataFrame, recent_hours: float) -> pd.Series:
+    now = pd.Timestamp.now(tz="UTC")
+    window = pd.Timedelta(hours=recent_hours)
+
+    def _ts(col: str) -> pd.Series:
+        if col not in df.columns:
+            return pd.Series(pd.NaT, index=df.index)
+        return pd.to_datetime(df[col], utc=True, errors="coerce")
+
+    def _within(col: str, *, past_only: bool = False) -> pd.Series:
+        delta = now - _ts(col)
+        if past_only:
+            return delta.between(pd.Timedelta(0), window)
+        return delta.abs() <= window
+
+    is_active = (df["flight_status"] == "ACTIVE") if "flight_status" in df.columns \
+        else pd.Series(False, index=df.index)
+    return (is_active.fillna(False)
+            | _within("scheduled_gate_departure").fillna(False)
+            | _within("actual_off", past_only=True).fillna(False)
+            | _within("actual_on", past_only=True).fillna(False))
+
+
+def current_flights(recent_hours: float | None = None) -> pd.DataFrame:
+    """The subset of load_flights() that's genuinely current right now —
+    airborne, or within `recent_hours` of scheduled/actual departure or
+    arrival. Use this for the map and any "current activity" display;
+    load_flights() itself (the fuller tracked set) is unchanged, for
+    headline "how much are we tracking" counts."""
+    df = load_flights()
+    hours = RECENT_HOURS if recent_hours is None else recent_hours
+    return df[_current_mask(df, hours)].reset_index(drop=True)
 
 
 def _load_flights_backend() -> pd.DataFrame:
