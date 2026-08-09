@@ -1,0 +1,77 @@
+name: Deploy UI
+
+# Builds + pushes the Streamlit app image on every push touching
+# aeroflux/aeroflux_ui/**, then (once configured — see the `deploy` job
+# below) redeploys it on Lightsail. Uses the built-in GITHUB_TOKEN for GHCR
+# (packages: write) — no separate PAT needed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aeroflux/aeroflux_ui/**"
+      - ".github/workflows/deploy-ui.yml"
+  workflow_dispatch: {}
+
+env:
+  IMAGE: ghcr.io/jonathanwilsonami/aeroflux-ui
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha_tag: ${{ steps.meta.outputs.sha_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "sha_tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: aeroflux/aeroflux_ui/streamlit_app
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.sha_tag }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # This job is intentionally gated off (skips cleanly, doesn't fail the
+    # workflow) until Lightsail SSH access is wired up. build-and-push above
+    # still runs and succeeds independently, so the image is always
+    # available on GHCR to pull manually — see ../../deploy.sh.
+    #
+    # To enable: add repo secrets LIGHTSAIL_SSH_HOST, LIGHTSAIL_SSH_KEY
+    # (and optionally LIGHTSAIL_SSH_USER, default "ubuntu"), then set the
+    # repo variable DEPLOY_ENABLED=true (Settings -> Secrets and variables ->
+    # Actions -> Variables). Kept as a separate `vars` flag rather than
+    # checking the secrets directly so this condition is unambiguous either
+    # way regardless of GitHub's secrets-in-`if` evaluation quirks.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    steps:
+      - name: Redeploy on Lightsail
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.LIGHTSAIL_SSH_HOST }}
+          username: ${{ secrets.LIGHTSAIL_SSH_USER || 'ubuntu' }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          envs: IMAGE_TAG
+          script: |
+            cd /opt/aeroflux
+            IMAGE_TAG=latest docker compose -f docker-compose.lightsail.yml pull
+            IMAGE_TAG=latest docker compose -f docker-compose.lightsail.yml up -d
+        env:
+          IMAGE_TAG: latest

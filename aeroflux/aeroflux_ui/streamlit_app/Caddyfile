@@ -1,0 +1,12 @@
+# Caddyfile — reverse proxy for aeroflux.duckdns.org -> the app container.
+# Caddy handles Let's Encrypt TLS automatically: it just needs :80/:443
+# reachable from the internet and the DNS A record already pointed at this
+# host (duckdns.org handles the DNS side). No cert config needed here.
+#
+# If this ever breaks (bad DNS, port not open, rate-limited by Let's
+# Encrypt), the app is still reachable directly on :8501 — see
+# docker-compose.lightsail.yml's comment on why that port is published
+# unconditionally.
+aeroflux.duckdns.org {
+	reverse_proxy app:8501
+}
