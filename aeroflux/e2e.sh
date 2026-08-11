@@ -29,6 +29,8 @@ cd "$ROOT"
 : "${UI_PORT:=8501}"
 : "${RUN_DIR_FILE:=$ROOT/out/.current_run_dir}"
 : "${MODEL_LINK:=$ROOT/out/current_model.joblib}"
+: "${INGEST_STALE_MINUTES:=5}"            # cmd_health: raw_messages must have grown
+                                           # this recently, or ingest is reported STALLED
 export DSN
 # auto-detect the Streamlit app dir (yours is aeroflux_ui/streamlit_app)
 if [ -z "${UI_DIR:-}" ]; then
@@ -142,10 +144,41 @@ cmd_health(){
   done
   curl -sf "http://localhost:$UI_PORT/_stcore/health" >/dev/null 2>&1 && echo "ui: UP (:$UI_PORT)" || echo "ui: down"
   echo "--- processes ---"
-  for p in ingest score sync archive ui; do
+  local issues=0
+  for p in score sync archive ui; do
     pid=$(cat "$ROOT/out/.${p}_pid" 2>/dev/null || true)
-    if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then echo "$p: running ($pid)"; else echo "$p: STOPPED"; fi
+    if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "$p: running ($pid)"
+    else
+      echo "$p: STOPPED"; issues=1
+    fi
   done
+
+  # ingest gets a real liveness check, not just a PID check. A PID staying
+  # alive while the underlying SWIM bridge silently stopped producing data
+  # is exactly what let ingest sit dead for ~2 days undetected: run.sh's
+  # cmd_stream backgrounds swim_to_kafka.py and never supervises it, so if
+  # the process dies (or — before the swim_to_kafka.py auto-reconnect fix —
+  # the Solace receiver terminates and the process exits cleanly), the
+  # wrapper `run.sh stream` shell itself (and its PID) stays up for the
+  # full --duration regardless, doing nothing. Require actual evidence:
+  # raw_messages growing in the last INGEST_STALE_MINUTES.
+  ingest_pid=$(cat "$ROOT/out/.ingest_pid" 2>/dev/null || true)
+  if [ -n "${ingest_pid:-}" ] && kill -0 "$ingest_pid" 2>/dev/null; then
+    recent="$(psql "$DSN" -tAc "SELECT count(*) FROM swim.raw_messages WHERE stored_at > now() - make_interval(mins => ${INGEST_STALE_MINUTES});" 2>/dev/null)"
+    if [ -z "${recent:-}" ]; then
+      echo "ingest: running ($ingest_pid) — UNKNOWN (could not query raw_messages to verify liveness)"
+    elif [ "$recent" -gt 0 ] 2>/dev/null; then
+      echo "ingest: running ($ingest_pid) — $recent raw message(s) in the last ${INGEST_STALE_MINUTES}m"
+    else
+      echo "ingest: INGEST STALLED — PID $ingest_pid is alive but 0 raw messages landed in the last ${INGEST_STALE_MINUTES}m (SWIM bridge likely stuck/disconnected; check logs/ingest.log + swim_to_kafka.log)"
+      issues=1
+    fi
+  else
+    echo "ingest: STOPPED"; issues=1
+  fi
+
+  return "$issues"
 }
 
 # ---- UP / DOWN -------------------------------------------------------------

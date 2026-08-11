@@ -89,7 +89,15 @@ new model.
 | Scoring | `out/predictions.parquet` + `predictions` table rows | grows each cycle |
 | Model | `out/current_model.joblib` | present |
 | UI | `http://localhost:8501/_stcore/health` | UP |
-| Processes | ingest / score / archive / ui | all "running" |
+| Processes | score / sync / archive / ui | "running" (PID alive) |
+| Ingest | PID alive **and** `raw_messages` grew in the last `INGEST_STALE_MINUTES` (default 5) | "running (PID) — N raw message(s) in the last 5m" |
+
+Ingest gets a stronger check than the others on purpose: a PID can stay
+alive for its full `--duration` while the underlying SWIM bridge is dead
+(the wrapper doesn't supervise the backgrounded process) — that let ingest
+sit dead for ~2 days once while the PID check alone still said "running."
+If you see `INGEST STALLED`, the PID is up but nothing is arriving —
+restart it (`./e2e.sh ingest`) rather than trusting the process list.
 
 Run it a few times over ten minutes; the counts should move.
 
