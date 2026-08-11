@@ -22,6 +22,11 @@
 # the Lightsail app box. Override AWS_PROFILE/AWS_REGION/S3_BUCKET/
 # DYNAMODB_TABLE/RECENT_HOURS in the environment if yours differ.
 #
+# DynamoDB's exact item count (a full Select=COUNT scan) is opt-in
+# (DYNAMODB_EXACT_COUNT=1) — it costs ~1 RCU per item evaluated, which is
+# 90-170k RCU on this table every time it runs at default. The free
+# describe-table ItemCount estimate is used by default instead.
+#
 # Resilience: one metric failing (DB unreachable, file missing, etc.) never
 # aborts the run — that section notes what it couldn't capture and the script
 # continues to the next one.
@@ -438,7 +443,7 @@ section_cloud_storage(){
     fi
     if [ "$py_ok" -eq 1 ]; then
       dd_block="$(AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" DYNAMODB_TABLE="$DYNAMODB_TABLE" \
-                  STATE_BACKEND=dynamodb RECENT_HOURS="$RECENT_HOURS" "$PYTHON" - <<'PYEOF'
+                  STATE_BACKEND=dynamodb RECENT_HOURS="$RECENT_HOURS" DYNAMODB_EXACT_COUNT="${DYNAMODB_EXACT_COUNT:-0}" "$PYTHON" - <<'PYEOF'
 import os, time
 from datetime import datetime, timezone, timedelta
 import boto3
@@ -447,12 +452,20 @@ table_name = os.environ["DYNAMODB_TABLE"]
 region = os.environ.get("AWS_REGION", "us-east-1")
 recent_hours = float(os.environ.get("RECENT_HOURS", "2"))
 
-client = boto3.client("dynamodb", region_name=region)
-t0 = time.time()
-exact = 0
-for page in client.get_paginator("scan").paginate(TableName=table_name, Select="COUNT"):
-    exact += page["Count"]
-print(f"EXACT|{exact}|{time.time()-t0:.1f}")
+# A full Select=COUNT scan still costs one RCU per item EVALUATED (it only
+# skips the network transfer of attributes, not the read charge) — for a
+# 90-170k item table that's 90-170k RCU on every single run of this script.
+# Confirmed as a real, live contributor to a ~$29 DynamoDB bill, not a
+# theoretical concern. describe-table's ItemCount above is free (AWS
+# already tracks it) and is a fine estimate for a baseline snapshot, so
+# the exact count is now opt-in only: DYNAMODB_EXACT_COUNT=1.
+if os.environ.get("DYNAMODB_EXACT_COUNT") == "1":
+    client = boto3.client("dynamodb", region_name=region)
+    t0 = time.time()
+    exact = 0
+    for page in client.get_paginator("scan").paginate(TableName=table_name, Select="COUNT"):
+        exact += page["Count"]
+    print(f"EXACT|{exact}|{time.time()-t0:.1f}")
 
 # Active-flight count — mirrors aeroflux_ui/streamlit_app/data_access.py's
 # current_flights()/_current_mask(): flight_status == ACTIVE (ground truth)
@@ -495,7 +508,9 @@ PYEOF
       active_line="$(printf '%s\n' "$dd_block" | grep '^ACTIVE|' || true)"
       if [ -n "$exact_line" ]; then
         IFS='|' read -r _ exact_n exact_s <<< "$exact_line"
-        write "| DynamoDB exact item count | ${exact_n:-0} | count | cloud | full \`Select=COUNT\` paginated scan, took ${exact_s:-?}s |"
+        write "| DynamoDB exact item count | ${exact_n:-0} | count | cloud | full \`Select=COUNT\` paginated scan, took ${exact_s:-?}s — costs ~1 RCU/item evaluated, opt-in only |"
+      else
+        write "| DynamoDB exact item count | _skipped_ | | cloud | costs ~1 RCU per item evaluated (90-170k on this table) — set \`DYNAMODB_EXACT_COUNT=1\` if you need it; the approx ItemCount above is free |"
       fi
       if [ -n "$tracked_line" ] && [ -n "$active_line" ]; then
         tracked_n="${tracked_line#TRACKED|}"

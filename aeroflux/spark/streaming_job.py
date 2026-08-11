@@ -66,8 +66,12 @@ def run(config_path: str) -> None:
             rows = [json.loads(r["json"]) for r in batch_df.collect()]
             if not rows:
                 return
-            # 24h context from the state store + this batch -> one frame
-            context = repo.recent_flight_states(hours=24)
+            # 24h context from the state store + this batch -> one frame.
+            # Bounded Limit on purpose — an unbounded call here would be a
+            # full DynamoDB table scan on every micro-batch if this job (a
+            # dormant scaffold — not currently deployed anywhere) is ever
+            # actually run against the DynamoDB backend.
+            context = repo.recent_flight_states(hours=24, limit=5000)
             frame = pl.DataFrame(context + rows)
 
             canonical = from_silver(frame, airframe_key=cfg.features.airframe_key)
