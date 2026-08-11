@@ -33,6 +33,11 @@ log = logging.getLogger("swim_to_kafka")
 
 STOP_REQUESTED = False
 
+# Reconnect backoff for the live SWIM bridge loop (see run_live) — starts
+# fast, caps out so a genuinely-down broker doesn't get hammered.
+RECONNECT_BACKOFF_BASE_S = 2.0
+RECONNECT_BACKOFF_MAX_S = 60.0
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -113,9 +118,35 @@ def payload_as_text(message) -> str:
     return bytes(payload_bytes).decode("utf-8", errors="replace")
 
 
+def _limits_reached(args: argparse.Namespace, started_at: float, published: int) -> bool:
+    if args.duration and time.monotonic() - started_at >= args.duration:
+        return True
+    if args.max_messages and published >= args.max_messages:
+        return True
+    return False
+
+
+def _build_service(host: str, vpn: str, username: str, password: str, tls_properties: dict):
+    from solace.messaging.messaging_service import MessagingService
+
+    return (
+        MessagingService.builder()
+        .from_properties(
+            {
+                "solace.messaging.transport.host": host,
+                "solace.messaging.service.vpn-name": vpn,
+                "solace.messaging.authentication.scheme.basic.username": username,
+                "solace.messaging.authentication.scheme.basic.password": password,
+                **tls_properties,
+            }
+        )
+        .build()
+    )
+
+
 def run_live(args: argparse.Namespace) -> None:
     try:
-        from solace.messaging.messaging_service import MessagingService
+        from solace.messaging.messaging_service import MessagingService  # noqa: F401 — import check
         from solace.messaging.resources.queue import Queue
     except ImportError as exc:
         raise RuntimeError(
@@ -142,59 +173,57 @@ def run_live(args: argparse.Namespace) -> None:
             "solace.messaging.tls.trust-store-path": trust_store,
         }
 
-    service = (
-        MessagingService.builder()
-        .from_properties(
-            {
-                "solace.messaging.transport.host": host,
-                "solace.messaging.service.vpn-name": vpn,
-                "solace.messaging.authentication.scheme.basic.username": username,
-                "solace.messaging.authentication.scheme.basic.password": password,
-                **tls_properties,
-            }
-        )
-        .build()
-    )
-
     producer = build_kafka_producer()
     topic = os.getenv("KAFKA_TOPIC", "swim.raw.flight")
-    receiver = None
     published = 0
     started_at = time.monotonic()
+    backoff = RECONNECT_BACKOFF_BASE_S
+    attempt = 0
 
-    try:
-        log.info("Connecting to SWIM Solace host %s", host)
-        service.connect()
-        receiver = (
-            service.create_persistent_message_receiver_builder()
-            .build(Queue.durable_exclusive_queue(queue_name))
-        )
-        receiver.start()
-        log.info("Connected. Bridging queue %s -> Kafka topic %s", queue_name, topic)
+    # Outer reconnect loop. Every failure below — a terminated Solace
+    # receiver, a dropped connection, a Kafka publish failure — used to fall
+    # through to the same place: the process exited ("Stopped after
+    # publishing N message(s)") and nothing brought it back. That's what let
+    # ingest sit dead for ~2 days while `e2e.sh health` still showed the PID
+    # as "running" (it was — just not doing anything; see e2e.sh's
+    # cmd_health for the matching fix, which checks raw_messages growth
+    # instead of just the PID). This can't silently die during a demo:
+    # every failure here is treated as retriable — log it, clean up, back
+    # off (2s, doubling to a 60s cap), reconnect, resume. Only
+    # STOP_REQUESTED (SIGINT/SIGTERM) or the --duration/--max-messages caps
+    # end the loop.
+    while not STOP_REQUESTED and not _limits_reached(args, started_at, published):
+        attempt += 1
+        service = _build_service(host, vpn, username, password, tls_properties)
+        receiver = None
+        try:
+            log.info("Connecting to SWIM Solace host %s (attempt %d)", host, attempt)
+            service.connect()
+            receiver = (
+                service.create_persistent_message_receiver_builder()
+                .build(Queue.durable_exclusive_queue(queue_name))
+            )
+            receiver.start()
+            log.info("Connected. Bridging queue %s -> Kafka topic %s", queue_name, topic)
+            backoff = RECONNECT_BACKOFF_BASE_S  # a live connection resets the backoff
 
-        while not STOP_REQUESTED:
-            if args.duration and time.monotonic() - started_at >= args.duration:
-                break
-            if args.max_messages and published >= args.max_messages:
-                break
+            while not STOP_REQUESTED and not _limits_reached(args, started_at, published):
+                message = receiver.receive_message(1000)
+                if message is None:
+                    continue
 
-            message = receiver.receive_message(1000)
-            if message is None:
-                continue
+                payload = payload_as_text(message)
+                if not payload:
+                    log.warning("Received an empty payload; acknowledging and skipping")
+                    receiver.ack(message)
+                    continue
 
-            payload = payload_as_text(message)
-            if not payload:
-                log.warning("Received an empty payload; acknowledging and skipping")
-                receiver.ack(message)
-                continue
+                destination = ""
+                try:
+                    destination = message.get_destination_name() or ""
+                except Exception:
+                    pass
 
-            destination = ""
-            try:
-                destination = message.get_destination_name() or ""
-            except Exception:
-                pass
-
-            try:
                 publish_raw_message(producer, topic, payload, destination)
                 # Acknowledge only after Kafka confirms the write.
                 receiver.ack(message)
@@ -205,22 +234,34 @@ def run_live(args: argparse.Namespace) -> None:
                     len(payload.encode("utf-8")),
                     topic,
                 )
-            except Exception:
-                # Do not ACK. The persistent queue can redeliver after reconnect.
-                log.exception("Failed to publish to Kafka; leaving SWIM message unacknowledged")
-                break
-    finally:
-        producer.flush(5.0)
-        if receiver is not None:
-            try:
-                receiver.terminate()
-            except Exception:
-                log.debug("Receiver termination failed", exc_info=True)
-        try:
-            service.disconnect()
         except Exception:
-            log.debug("Solace disconnect failed", exc_info=True)
+            # Covers a terminated/dead receiver, a dropped Solace
+            # connection, and Kafka publish failures alike — any of these
+            # used to exit the process. Do not ACK on the way out: the
+            # persistent queue redelivers unacknowledged messages after
+            # reconnect, so nothing already-consumed-but-unpublished is lost.
+            log.exception(
+                "SWIM bridge connection lost (attempt %d, %d published so far) "
+                "— reconnecting in %.0fs",
+                attempt, published, backoff,
+            )
+        finally:
+            if receiver is not None:
+                try:
+                    receiver.terminate()
+                except Exception:
+                    log.debug("Receiver termination failed", exc_info=True)
+            try:
+                service.disconnect()
+            except Exception:
+                log.debug("Solace disconnect failed", exc_info=True)
 
+        if STOP_REQUESTED or _limits_reached(args, started_at, published):
+            break
+        time.sleep(backoff)
+        backoff = min(backoff * 2, RECONNECT_BACKOFF_MAX_S)
+
+    producer.flush(5.0)
     log.info("Stopped after publishing %d message(s)", published)
 
 
