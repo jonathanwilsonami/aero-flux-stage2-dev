@@ -58,6 +58,20 @@ def load_live_metrics() -> dict | None:
         return None
 
 
+@st.cache_data(ttl=1800)
+def load_pending_count() -> int | None:
+    """Predictions still awaiting a resolved outcome — the denominator that
+    makes the right-censoring caveat below concrete rather than generic."""
+    p = _EVAL_DIR / "_pending_predictions.parquet"
+    if not p.exists():
+        return None
+    try:
+        import polars as pl
+        return int(pl.scan_parquet(p).select(pl.len()).collect().item())
+    except Exception:
+        return None
+
+
 def _fmt(x) -> str:
     if x is None:
         return "N/A"
@@ -84,7 +98,35 @@ else:
                f"**{metrics.get('n_pairs', 'N/A'):,}** · prediction date range: "
                f"{metrics.get('scored_at_min', 'N/A')} → {metrics.get('scored_at_max', 'N/A')}")
 
+    n_resolved = metrics.get("n_pairs", 0)
+    n_pending = load_pending_count()
     overall = metrics.get("overall", {})
+    delay_rate = overall.get("actual_delay_rate")
+
+    if n_pending is not None:
+        pct_resolved = 100 * n_resolved / (n_resolved + n_pending) if (n_resolved + n_pending) else 0
+        st.error(
+            f"📉 **This evaluation sample is still young and under-represents delayed "
+            f"flights — read the numbers below as provisional, not the model's real "
+            f"performance.** **{n_pending:,} predictions are still pending an outcome** "
+            f"vs. **{n_resolved:,} resolved** (only {pct_resolved:.2f}% of everything "
+            f"scored so far has a known outcome). This is **right-censoring**: a "
+            f"severely delayed flight takes longer, in wall-clock time, to actually "
+            f"land, so it takes longer to show up as \"resolved\" — meaning delayed "
+            f"flights are systematically under-represented among outcomes observed "
+            f"*so far*, which depresses both the measured actual-delay-rate "
+            f"({_fmt(delay_rate)} here vs. BTS's ~18–22% base rate) and the AUC. "
+            f"Confirmed via percentile comparison against BTS (2026-08-12): live's "
+            f"median `arr_delay_min` roughly tracks BTS, but the upper tail is "
+            f"compressed (p90: live≈0min vs. BTS≈+34min) — the signature of censoring, "
+            f"not a data or reconciliation bug. **Expected to self-correct as the "
+            f"pending backlog resolves over the coming days.** See "
+            f"PROJECT_CONTEXT.md § Known Limitations for the full writeup, including a "
+            f"second, smaller, structural gap: live `arr_delay_min` uses ADS-B "
+            f"touchdown, not gate arrival (~5–15min early bias, unfixable without live "
+            f"gate-arrival data).",
+            icon="📉",
+        )
     bts = metrics.get("bts_reference")
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -175,7 +217,11 @@ else:
     st.caption(
         "⚠️ Ingest was down Aug 9–11 2026; some of this data comes from that "
         "thinner window. Small-n buckets are noisy — treat n<50 as directional, "
-        "not conclusive."
+        "not conclusive. The `24h+` and `6-24h` buckets are hit hardest by the "
+        "right-censoring effect above (a long-lead-time prediction needs its flight "
+        "to have both departed AND landed to resolve at all) — expect those two to "
+        "gain volume slowest as the pending backlog resolves, and to be the last "
+        "ones worth trusting for \"how well do we predict N+ hours out.\""
     )
 
 st.divider()
