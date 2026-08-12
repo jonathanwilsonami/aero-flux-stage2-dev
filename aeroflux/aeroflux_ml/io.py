@@ -375,6 +375,10 @@ class LakeStore(Protocol):
     def write_parquet(self, df: pl.DataFrame, key: str) -> str: ...
     def read_parquet(self, key: str) -> pl.DataFrame: ...
     def list(self, prefix: str) -> list[str]: ...
+    # Generic byte read/write — for small non-parquet artifacts (e.g. the
+    # live-evaluation JSON report) that don't warrant their own Protocol.
+    def write_bytes(self, data: bytes, key: str) -> str: ...
+    def read_bytes(self, key: str) -> bytes: ...
 
 
 class LocalLakeStore:
@@ -395,6 +399,17 @@ class LocalLakeStore:
 
     def read_parquet(self, key: str) -> pl.DataFrame:
         return pl.read_parquet(self._path(key))
+
+    def write_bytes(self, data: bytes, key: str) -> str:
+        path = self._path(key)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+        return path
+
+    def read_bytes(self, key: str) -> bytes:
+        with open(self._path(key), "rb") as f:
+            return f.read()
 
     def list(self, prefix: str) -> list[str]:
         base = self._path(prefix)
@@ -440,6 +455,15 @@ class S3LakeStore:
         import io as _io
         resp = self._client.get_object(Bucket=self.bucket, Key=self._key(key))
         return pl.read_parquet(_io.BytesIO(resp["Body"].read()))
+
+    def write_bytes(self, data: bytes, key: str) -> str:
+        full_key = self._key(key)
+        self._client.put_object(Bucket=self.bucket, Key=full_key, Body=data)
+        return f"s3://{self.bucket}/{full_key}"
+
+    def read_bytes(self, key: str) -> bytes:
+        resp = self._client.get_object(Bucket=self.bucket, Key=self._key(key))
+        return resp["Body"].read()
 
     def list(self, prefix: str) -> list[str]:
         full_prefix = self._key(prefix)
