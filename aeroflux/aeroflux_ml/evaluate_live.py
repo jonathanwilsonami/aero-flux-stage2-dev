@@ -1,37 +1,52 @@
 """Reconcile forward-captured live predictions against realized outcomes,
-then score them with the same metric family used for BTS training.
+then score them with the same metric family used for BTS training — broken
+out per lag bucket (how far ahead of the outcome the kept prediction was
+made), not flattened to one number.
 
 Predictions are scored at scheduled-departure time (the forecast moment);
 ground truth (actual arrival delay) only becomes known hours later, once the
 flight lands. score_live.py's hourly prediction snapshots (out/predictions/)
 and e2e.sh's hourly gold snapshots (out/gold_live/ — arr_delay_min populated
-once a flight completes) are the two halves; this module pairs an EARLIER
-prediction with a LATER-observed outcome for the same flight_key — never the
-reverse (that would be hindsight, not evaluation).
+once a flight completes) are the two halves; this module pairs EARLIER
+predictions with a LATER-observed outcome for the same flight_key — never
+the reverse (that would be hindsight, not evaluation).
 
     python -m aeroflux_ml.evaluate_live              # reconcile, then report
     python -m aeroflux_ml.evaluate_live reconcile    # stage 1 only
     python -m aeroflux_ml.evaluate_live report       # stage 2 only
 
 Stage 1 (reconcile) is incremental / append-only: out/eval/reconciled_pairs.parquet
-only ever grows (one row per flight_key, forever — see the dedupe rule
-below), and out/eval/reconcile_state.json tracks which snapshot files have
-already been folded in, so a rerun only reads whatever's new.
+only ever grows, and out/eval/reconcile_state.json tracks which snapshot
+files have already been folded in, so a rerun only reads whatever's new.
 
-Guardrails:
+REVISION (2026-08-12): the original version kept only the single LATEST
+pre-outcome prediction per flight_key. Verified live that this silently
+discarded genuine multi-hour-lag evidence — flight_key KS786757QQ was
+predicted hourly for 36 straight hours (2026-08-09 10:55 -> 2026-08-10
+23:00) before landing, and the old dedupe kept only the last (~17min lag)
+prediction, throwing away the other 30+. An outage-window vs. clean-
+overnight split showed statistically identical lag profiles (both ~88%
+under 30min), which is what exposed this as a dedupe-rule artifact, not an
+outage artifact. Now every flight can contribute UP TO one pair per lag
+bucket (its most lead-time-generous prediction within that bucket), so
+accuracy can be reported as a function of how far ahead the prediction was
+made — directly answering "how well do we predict 2+ hours out," not just
+"how well do we predict right before landing."
+
+Guardrails (unchanged in spirit):
   - earlier-prediction-to-later-outcome ONLY: a prediction's `scored_at`
     (UTC, per-row, the real forecast moment) must be strictly before the
     gold snapshot's own capture time. Gold snapshot filenames are stamped
     in the host's LOCAL time (bash `date +%Y%m%d_%H%M`), not UTC — verified
     empirically (2026-08-11) that predictions_20260809_0655's filename
     (local ~06:55) holds rows with scored_at=10:55:26 (a 4h/EDT offset).
-    Comparing the two without converting would silently mis-order every
-    match by the host's UTC offset; _local_to_utc() below fixes this.
+    _local_to_utc() below fixes this.
   - only flights with arr_delay_min actually populated in that gold
     snapshot count as a resolved outcome.
-  - dedupe by flight_key: if multiple predictions preceded the outcome,
-    keep the LATEST one (closest foresight to the actual event, not
-    whatever the first guess hours earlier happened to be).
+  - dedupe by (flight_key, lag_bucket): within a bucket, keep the
+    LARGEST-lag candidate (the earliest prediction that still falls in
+    that bucket's range — the most lead-time-generous sample for that
+    band), verified via sort(descending) + group_by().first().
 """
 from __future__ import annotations
 
@@ -52,6 +67,28 @@ PENDING_PATH = OUT_DIR / "_pending_predictions.parquet"
 
 DELAY_THRESHOLD_MIN = 15  # matches the training label: arr_delay_min >= 15
 _TS_RE = re.compile(r"(\d{8})_(\d{4})")
+
+# Lag buckets: hours between the kept prediction's scored_at and the outcome
+# becoming observed. Ordered widest-lead-time first — this order is reused
+# for report/table ordering everywhere below, so it's the single source of
+# truth for both bucket assignment and display order.
+_LAG_BUCKETS = [
+    (24.0, float("inf"), "24h+"),
+    (6.0, 24.0, "6-24h"),
+    (2.0, 6.0, "2-6h"),
+    (0.5, 2.0, "0.5-2h"),
+    (0.0, 0.5, "<30min"),
+]
+_LAG_BUCKET_LABELS = [label for _, _, label in _LAG_BUCKETS]
+
+
+def _bucket_expr(lag_col: str = "lag_h") -> pl.Expr:
+    lag = pl.col(lag_col)
+    expr = None
+    for lo, hi, label in _LAG_BUCKETS:
+        cond = (lag >= lo) if hi == float("inf") else ((lag >= lo) & (lag < hi))
+        expr = pl.when(cond).then(pl.lit(label)) if expr is None else expr.when(cond).then(pl.lit(label))
+    return expr.otherwise(None)
 
 
 def _parse_snapshot_local_dt(path: Path) -> datetime | None:
@@ -82,6 +119,13 @@ def _save_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2, default=str))
 
 
+# Pending predictions accumulate — one row per (flight_key, scored_at) seen
+# so far, not collapsed to one-per-flight — because which bucket a
+# prediction belongs to can't be known until the outcome's timestamp is
+# known, so nothing can be discarded before then. This is the actual fix:
+# the old version collapsed to "latest wins" at THIS stage, before the
+# outcome was even known, which is what silently threw away long-lag
+# evidence.
 _PENDING_SCHEMA = {
     "flight_key": pl.Utf8, "scored_at": pl.Datetime,
     "delay_probability": pl.Float64, "predicted_delayed": pl.Int64,
@@ -97,56 +141,61 @@ def _load_pending() -> pl.DataFrame:
 
 def _save_pending(df: pl.DataFrame) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    if df.height == 0:
+        if PENDING_PATH.exists():
+            PENDING_PATH.unlink()
+        return
     df.write_parquet(PENDING_PATH)
 
 
 def reconcile(pred_dir: Path = PRED_DIR, gold_dir: Path = GOLD_DIR, *, quiet: bool = False) -> dict:
-    """Stage 1. Returns {"new_pairs": int, "total_pairs": int, "scored_at_min": ..., "scored_at_max": ...}."""
+    """Stage 1. Returns a summary dict — new_pairs, total_pairs, per-bucket
+    counts, date range, still_pending."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     state = _load_state()
     processed_pred = set(state["processed_predictions"])
     processed_gold = set(state["processed_gold"])
 
-    already_reconciled: set[str] = set()
+    # A flight_key is "resolved" once its FIRST completed-outcome gold
+    # snapshot has been processed — every applicable bucket gets emitted at
+    # that moment, and it's never reconsidered (arr_delay_min, once
+    # populated, stays populated in every later gold snapshot too — we only
+    # want the first, truest observation time).
+    resolved: set[str] = set()
     if PAIRS_PATH.exists():
-        already_reconciled = set(pl.read_parquet(PAIRS_PATH, columns=["flight_key"])["flight_key"].to_list())
+        resolved = set(pl.read_parquet(PAIRS_PATH, columns=["flight_key"])["flight_key"].to_list())
 
     pending = _load_pending()
-    if already_reconciled and pending.height:
-        pending = pending.filter(~pl.col("flight_key").is_in(list(already_reconciled)))
+    if resolved and pending.height:
+        pending = pending.filter(~pl.col("flight_key").is_in(list(resolved)))
 
-    # ---- fold in any new prediction snapshots -------------------------------
+    # ---- fold in new prediction snapshots: accumulate, never collapse -----
     pred_files = _list_snapshots(pred_dir, "predictions")
     new_pred_files = [p for p in pred_files if p.name not in processed_pred]
     new_pred_rows = []
     for p in new_pred_files:
         try:
-            # Explicit column order (matches _PENDING_SCHEMA) — vertical
-            # concat below matches positionally, not by name; a plain
-            # `columns=[...]` read that doesn't match pending's column
-            # order broke this on the very first real run.
             df = pl.read_parquet(p, columns=list(_PENDING_SCHEMA)).select(list(_PENDING_SCHEMA))
         except Exception as e:
             if not quiet:
                 print(f"  skip (unreadable) {p.name}: {e}")
             continue
-        if already_reconciled:
-            df = df.filter(~pl.col("flight_key").is_in(list(already_reconciled)))
+        if resolved:
+            df = df.filter(~pl.col("flight_key").is_in(list(resolved)))
         new_pred_rows.append(df)
         processed_pred.add(p.name)
 
     if new_pred_rows:
-        incoming = pl.concat(new_pred_rows, how="diagonal_relaxed")
-        combined = pl.concat([pending, incoming], how="diagonal_relaxed")
-        # Keep the LATEST prediction per flight_key (max scored_at) — verified
-        # (see module tests) that sort-ascending + group_by().last() picks the
-        # max, not an arbitrary row.
-        pending = combined.sort("scored_at").group_by("flight_key", maintain_order=False).last()
+        pending = pl.concat([pending, *new_pred_rows], how="diagonal_relaxed")
+        # Exact (flight_key, scored_at) duplicates only (e.g. a snapshot
+        # read twice) — NOT a flight_key-only collapse, which would be the
+        # same bug all over again.
+        pending = pending.unique(subset=["flight_key", "scored_at"], keep="first")
 
-    # ---- check new gold snapshots against the pending predictions ----------
+    # ---- check new gold snapshots; bucket + emit pairs on first completion ----
     gold_files = _list_snapshots(gold_dir, "gold")
     new_gold_files = [g for g in gold_files if g.name not in processed_gold]
-    new_pairs: list[pl.DataFrame] = []
+    new_pair_rows: list[dict] = []
 
     for g in new_gold_files:
         g_local = _parse_snapshot_local_dt(g)
@@ -164,35 +213,65 @@ def reconcile(pred_dir: Path = PRED_DIR, gold_dir: Path = GOLD_DIR, *, quiet: bo
             continue
         completed = gdf.filter(pl.col("arr_delay_min").is_not_null())
         if completed.height and pending.height:
-            matched = (
-                pending.join(completed, on="flight_key", how="inner")
-                .filter(pl.col("scored_at") < g_utc)
-            )
-            if matched.height:
-                matched = matched.with_columns([
-                    pl.lit(g.name).alias("outcome_snapshot"),
-                    pl.lit(g_utc).alias("outcome_observed_at_utc"),
-                    (pl.col("arr_delay_min") >= DELAY_THRESHOLD_MIN).cast(pl.Int64).alias("actual_delayed"),
-                ])
-                new_pairs.append(matched)
-                newly_reconciled = matched["flight_key"].to_list()
-                pending = pending.filter(~pl.col("flight_key").is_in(newly_reconciled))
-                already_reconciled.update(newly_reconciled)
+            newly_completed = [k for k in completed["flight_key"].to_list() if k not in resolved]
+            if newly_completed:
+                arr_by_key = dict(zip(completed["flight_key"].to_list(), completed["arr_delay_min"].to_list()))
+                cand = pending.filter(pl.col("flight_key").is_in(newly_completed))
+                cand = cand.filter(pl.col("scored_at") < g_utc)
+                if cand.height:
+                    lag_h = (g_utc - cand["scored_at"]).dt.total_minutes() / 60.0
+                    cand = cand.with_columns(lag_h.alias("lag_h"))
+                    cand = cand.with_columns(_bucket_expr().alias("lag_bucket"))
+                    cand = cand.filter(pl.col("lag_bucket").is_not_null())
+                    if cand.height:
+                        # Within each (flight_key, lag_bucket), keep the
+                        # LARGEST lag — the earliest prediction that still
+                        # falls in that bucket, i.e. the most lead-time-
+                        # generous sample available for that band. Verified
+                        # (module tests) that sort(descending) +
+                        # group_by().first() picks the max, not an
+                        # arbitrary row.
+                        best = (cand.sort("lag_h", descending=True)
+                                .group_by(["flight_key", "lag_bucket"], maintain_order=False)
+                                .first())
+                        for row in best.iter_rows(named=True):
+                            adm = arr_by_key[row["flight_key"]]
+                            new_pair_rows.append({
+                                "flight_key": row["flight_key"],
+                                "scored_at": row["scored_at"],
+                                "delay_probability": row["delay_probability"],
+                                "predicted_delayed": row["predicted_delayed"],
+                                "model_version": row["model_version"],
+                                "lag_bucket": row["lag_bucket"],
+                                "lag_hours": row["lag_h"],
+                                "arr_delay_min": adm,
+                                "actual_delayed": int(adm >= DELAY_THRESHOLD_MIN),
+                                "outcome_snapshot": g.name,
+                                "outcome_observed_at_utc": g_utc,
+                            })
+                # Resolved whether or not it had a valid preceding
+                # prediction to pair (e.g. first ever seen already-landed)
+                # — must never be reconsidered against a later gold snapshot.
+                resolved.update(newly_completed)
+                pending = pending.filter(~pl.col("flight_key").is_in(newly_completed))
         processed_gold.add(g.name)
 
     new_pair_count = 0
-    if new_pairs:
-        pairs_df = pl.concat(new_pairs, how="diagonal_relaxed").select([
+    bucket_counts_this_run: dict[str, int] = {}
+    if new_pair_rows:
+        pairs_df = pl.DataFrame(new_pair_rows).select([
             "flight_key", "scored_at", "delay_probability", "predicted_delayed",
-            "model_version", "arr_delay_min", "actual_delayed",
+            "model_version", "lag_bucket", "lag_hours", "arr_delay_min", "actual_delayed",
             "outcome_snapshot", "outcome_observed_at_utc",
         ])
-        # Defensive: a flight_key should never appear twice across runs (the
-        # already_reconciled filter above prevents it) — assert rather than
-        # silently double-count if that guarantee is ever violated.
-        assert pairs_df["flight_key"].n_unique() == pairs_df.height, \
-            "duplicate flight_key within a single reconcile pass — dedupe logic bug"
+        # Defensive: (flight_key, lag_bucket) should never repeat within a
+        # single pass (each flight_key is resolved exactly once, above) —
+        # assert rather than silently double-count if that's ever violated.
+        assert pairs_df.select(["flight_key", "lag_bucket"]).n_unique() == pairs_df.height, \
+            "duplicate (flight_key, lag_bucket) within a single reconcile pass — dedupe logic bug"
         new_pair_count = pairs_df.height
+        bucket_counts_this_run = dict(
+            pairs_df.group_by("lag_bucket").agg(pl.len().alias("n")).iter_rows())
         if PAIRS_PATH.exists():
             existing = pl.read_parquet(PAIRS_PATH)
             pairs_df = pl.concat([existing, pairs_df], how="diagonal_relaxed")
@@ -206,22 +285,24 @@ def reconcile(pred_dir: Path = PRED_DIR, gold_dir: Path = GOLD_DIR, *, quiet: bo
         "new_prediction_snapshots": len(new_pred_files),
         "new_gold_snapshots": len(new_gold_files),
         "new_pairs": new_pair_count,
+        "new_pairs_by_bucket": bucket_counts_this_run,
         "still_pending": pending.height,
     })
     _save_state(state)
 
-    total = pl.read_parquet(PAIRS_PATH) if PAIRS_PATH.exists() else pl.DataFrame(schema={"scored_at": pl.Datetime})
+    total = pl.read_parquet(PAIRS_PATH) if PAIRS_PATH.exists() else pl.DataFrame(schema={"scored_at": pl.Datetime, "lag_bucket": pl.Utf8})
     result = {"new_pairs": new_pair_count, "total_pairs": total.height,
-               "new_prediction_snapshots": len(new_pred_files), "new_gold_snapshots": len(new_gold_files),
-               "still_pending": pending.height}
+              "new_prediction_snapshots": len(new_pred_files), "new_gold_snapshots": len(new_gold_files),
+              "still_pending": pending.height, "new_pairs_by_bucket": bucket_counts_this_run}
     if total.height:
         result["scored_at_min"] = total["scored_at"].min()
         result["scored_at_max"] = total["scored_at"].max()
+        result["total_by_bucket"] = dict(total.group_by("lag_bucket").agg(pl.len().alias("n")).iter_rows())
     return result
 
 
 # ============================================================================
-# Stage 2 — metrics, same family as BTS training + calibration
+# Stage 2 — metrics, same family as BTS training + calibration, per bucket
 # ============================================================================
 
 def _bts_reference_row() -> dict | None:
@@ -246,15 +327,21 @@ def _bts_reference_row() -> dict | None:
     return row
 
 
-def compute_metrics(pairs: pl.DataFrame) -> dict:
-    import numpy as np
+def compute_metrics_for(df: pl.DataFrame) -> dict:
+    """Metrics for one subset (overall, or one lag bucket). Guards small/
+    degenerate subsets rather than letting sklearn raise."""
+    n = df.height
+    if n == 0:
+        return {"n": 0, "roc_auc": None, "pr_auc": None, "f1": None, "accuracy": None,
+                "brier": None, "positive_rate": None, "actual_delay_rate": None,
+                "confusion_matrix": {"tn": 0, "fp": 0, "fn": 0, "tp": 0}, "calibration": None}
+
     from sklearn.metrics import confusion_matrix
     from sklearn.calibration import calibration_curve
-
     from aeroflux_ml.training.evaluate import metrics as shared_metrics
 
-    y_true = pairs["actual_delayed"].to_numpy().astype(int)
-    p = pairs["delay_probability"].to_numpy().astype(float)
+    y_true = df["actual_delayed"].to_numpy().astype(int)
+    p = df["delay_probability"].to_numpy().astype(float)
 
     m = shared_metrics(y_true, p)  # roc_auc, pr_auc, f1, accuracy, brier, positive_rate, n
     m["actual_delay_rate"] = float(y_true.mean())
@@ -265,8 +352,8 @@ def compute_metrics(pairs: pl.DataFrame) -> dict:
                               "fn": int(cm[1, 0]), "tp": int(cm[1, 1])}
 
     n_classes = len(set(y_true.tolist()))
-    if n_classes > 1 and len(y_true) >= 10:
-        n_bins = min(10, max(2, len(y_true) // 5))
+    if n_classes > 1 and n >= 10:
+        n_bins = min(10, max(2, n // 5))
         try:
             frac_pos, mean_pred = calibration_curve(y_true, p, n_bins=n_bins, strategy="quantile")
         except ValueError:
@@ -277,6 +364,15 @@ def compute_metrics(pairs: pl.DataFrame) -> dict:
         m["calibration"] = None
 
     return m
+
+
+def compute_metrics(pairs: pl.DataFrame) -> dict:
+    """Overall metrics + one entry per lag bucket."""
+    overall = compute_metrics_for(pairs)
+    buckets = {}
+    for label in _LAG_BUCKET_LABELS:
+        buckets[label] = compute_metrics_for(pairs.filter(pl.col("lag_bucket") == label))
+    return {"overall": overall, "buckets": buckets}
 
 
 def _fmt(x) -> str:
@@ -290,7 +386,31 @@ def _fmt(x) -> str:
         return str(x)
 
 
-def write_report(pairs: pl.DataFrame, m: dict, recon_summary: dict) -> tuple[Path, Path]:
+def _metrics_table_rows(m: dict, bts: dict | None) -> list[str]:
+    lines = []
+    if bts:
+        lines.append("| Metric | Live | BTS training (held-out test) |")
+        lines.append("|---|---|---|")
+        lines.append(f"| n | {m['n']} | {bts.get('n', 'N/A')} |")
+        lines.append(f"| ROC-AUC | {_fmt(m['roc_auc'])} | {_fmt(float(bts['roc_auc']))} |")
+        lines.append(f"| PR-AUC | {_fmt(m['pr_auc'])} | {_fmt(float(bts['pr_auc']))} |")
+        lines.append(f"| F1 | {_fmt(m['f1'])} | {_fmt(float(bts['f1']))} |")
+        lines.append(f"| Accuracy | {_fmt(m['accuracy'])} | {_fmt(float(bts['accuracy']))} |")
+        lines.append(f"| Brier | {_fmt(m['brier'])} | {_fmt(float(bts['brier']))} |")
+        lines.append(f"| Positive rate (predicted) | {_fmt(m['positive_rate'])} | {_fmt(float(bts['positive_rate']))} |")
+        lines.append(f"| Actual delay rate | {_fmt(m['actual_delay_rate'])} | (BTS base rate) |")
+    else:
+        lines.append("| Metric | Value |")
+        lines.append("|---|---|")
+        for key, label in [("n", "n"), ("roc_auc", "ROC-AUC"), ("pr_auc", "PR-AUC"), ("f1", "F1"),
+                            ("accuracy", "Accuracy"), ("brier", "Brier"),
+                            ("positive_rate", "Positive rate (predicted)"),
+                            ("actual_delay_rate", "Actual delay rate")]:
+            lines.append(f"| {label} | {m[key] if key == 'n' else _fmt(m[key])} |")
+    return lines
+
+
+def write_report(pairs: pl.DataFrame, metrics: dict, recon_summary: dict) -> tuple[Path, Path]:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc)
     ts_str = ts.strftime("%Y%m%dT%H%M%SZ")
@@ -300,6 +420,8 @@ def write_report(pairs: pl.DataFrame, m: dict, recon_summary: dict) -> tuple[Pat
     date_min = pairs["scored_at"].min()
     date_max = pairs["scored_at"].max()
     bts = _bts_reference_row()
+    overall = metrics["overall"]
+    buckets = metrics["buckets"]
 
     lines: list[str] = []
     lines.append("# AeroFlux Live-Prediction Evaluation")
@@ -308,71 +430,53 @@ def write_report(pairs: pl.DataFrame, m: dict, recon_summary: dict) -> tuple[Pat
     lines.append(f"**Reconciled pairs:** {pairs.height}")
     lines.append(f"**Prediction date range (scored_at, UTC):** {date_min} → {date_max}")
     lines.append("")
-    lines.append("> Reconciled by pairing each live prediction's `delay_probability` /"
-                  " `predicted_delayed` (scored at the flight's scheduled-departure"
-                  " moment) with the REALIZED outcome once `arr_delay_min` becomes"
-                  " populated in a later gold_live snapshot — earlier-prediction-to-"
-                  "later-outcome only, never hindsight. `actual_delayed = "
-                  f"arr_delay_min >= {DELAY_THRESHOLD_MIN}`, matching the training"
-                  " label definition.")
+    lines.append("> Each flight can contribute UP TO one pair per lag bucket — how far"
+                  " ahead of the outcome the kept prediction was made — not just a single"
+                  " last-guess-before-landing number. Within a bucket, the kept prediction"
+                  " is the one with the MOST lead time in that band (earliest prediction"
+                  " still inside the bucket range). `actual_delayed = arr_delay_min >= "
+                  f"{DELAY_THRESHOLD_MIN}`, matching the training label definition.")
     lines.append(">")
     lines.append("> ⚠️ Ingest was down Aug 9–11; prediction/gold snapshots from that"
-                  " window are progressively thinner (fewer flights tracked each"
-                  " cycle as 48h retention aged out stale data with nothing new"
-                  " backfilling it — see CLAUDE.md Gotchas). Reported honestly below,"
-                  " not excluded or reweighted.")
+                  " window are thinner. Reported honestly, not excluded or reweighted.")
     lines.append("")
-    lines.append("## Metrics — same family as BTS training (`aeroflux_ml/training/evaluate.py`)")
+    lines.append("## Overall metrics — same family as BTS training (`aeroflux_ml/training/evaluate.py`)")
     lines.append("")
-    if bts:
-        lines.append(f"Side by side against the currently-deployed training run's held-out"
-                      f" test metrics (`{bts.get('run_id')}` / `{bts.get('name')}`,"
-                      f" n={bts.get('n')}):")
-        lines.append("")
-        lines.append("| Metric | Live (reconciled) | BTS training (held-out test) |")
-        lines.append("|---|---|---|")
-        lines.append(f"| n | {m['n']} | {bts.get('n', 'N/A')} |")
-        lines.append(f"| ROC-AUC | {_fmt(m['roc_auc'])} | {_fmt(float(bts['roc_auc']))} |")
-        lines.append(f"| PR-AUC | {_fmt(m['pr_auc'])} | {_fmt(float(bts['pr_auc']))} |")
-        lines.append(f"| F1 | {_fmt(m['f1'])} | {_fmt(float(bts['f1']))} |")
-        lines.append(f"| Accuracy | {_fmt(m['accuracy'])} | {_fmt(float(bts['accuracy']))} |")
-        lines.append(f"| Brier | {_fmt(m['brier'])} | {_fmt(float(bts['brier']))} |")
-        lines.append(f"| Positive rate (predicted) | {_fmt(m['positive_rate'])} | {_fmt(float(bts['positive_rate']))} |")
-        lines.append(f"| Actual delay rate | {_fmt(m['actual_delay_rate'])} | (BTS base rate, see PROJECT_CONTEXT.md) |")
-    else:
-        lines.append("_No BTS training run found at `out/.current_run_dir` for the side-by-side — showing live metrics only._")
-        lines.append("")
-        lines.append("| Metric | Value |")
-        lines.append("|---|---|")
-        lines.append(f"| n | {m['n']} |")
-        lines.append(f"| ROC-AUC | {_fmt(m['roc_auc'])} |")
-        lines.append(f"| PR-AUC | {_fmt(m['pr_auc'])} |")
-        lines.append(f"| F1 | {_fmt(m['f1'])} |")
-        lines.append(f"| Accuracy | {_fmt(m['accuracy'])} |")
-        lines.append(f"| Brier | {_fmt(m['brier'])} |")
-        lines.append(f"| Positive rate (predicted) | {_fmt(m['positive_rate'])} |")
-        lines.append(f"| Actual delay rate | {_fmt(m['actual_delay_rate'])} |")
+    lines.extend(_metrics_table_rows(overall, bts))
     lines.append("")
-    lines.append("## Confusion matrix (threshold = 0.5)")
+    lines.append("## Metrics by lag bucket — accuracy vs. how far ahead we predicted")
     lines.append("")
-    cm = m["confusion_matrix"]
+    lines.append("| Lag bucket | n | ROC-AUC | PR-AUC | F1 | Brier | Actual delay rate | TN | FP | FN | TP |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
+    for label in _LAG_BUCKET_LABELS:
+        bm = buckets[label]
+        cm = bm["confusion_matrix"]
+        lines.append(f"| {label} | {bm['n']} | {_fmt(bm['roc_auc'])} | {_fmt(bm['pr_auc'])} | "
+                      f"{_fmt(bm['f1'])} | {_fmt(bm['brier'])} | {_fmt(bm['actual_delay_rate'])} | "
+                      f"{cm['tn']} | {cm['fp']} | {cm['fn']} | {cm['tp']} |")
+    lines.append("")
+    lines.append("_Read this as: how much does accuracy degrade the further ahead of the"
+                  " outcome the prediction was made? Buckets with very small n are noisy —"
+                  " check n before trusting a bucket's numbers._")
+    lines.append("")
+    lines.append("## Overall confusion matrix (threshold = 0.5)")
+    lines.append("")
+    cm = overall["confusion_matrix"]
     lines.append("| | Predicted on-time | Predicted delayed |")
     lines.append("|---|---|---|")
     lines.append(f"| **Actual on-time** | {cm['tn']} (TN) | {cm['fp']} (FP) |")
     lines.append(f"| **Actual delayed** | {cm['fn']} (FN) | {cm['tp']} (TP) |")
     lines.append("")
-    lines.append("## Calibration — predicted probability vs. observed delay rate")
+    lines.append("## Overall calibration — predicted probability vs. observed delay rate")
     lines.append("")
-    if m["calibration"]:
+    if overall["calibration"]:
         lines.append("| Bin mean predicted P(delay) | Observed delay rate |")
         lines.append("|---|---|")
-        for mp, obs in zip(m["calibration"]["mean_predicted"], m["calibration"]["observed_rate"]):
+        for mp, obs in zip(overall["calibration"]["mean_predicted"], overall["calibration"]["observed_rate"]):
             lines.append(f"| {mp:.3f} | {obs:.3f} |")
-        lines.append("")
-        lines.append("_Well-calibrated means these two columns track each other closely._")
     else:
         lines.append("_Not enough reconciled pairs yet (or only one outcome class present)"
-                      " to bin a calibration curve — check back once more snapshots accumulate._")
+                      " to bin a calibration curve._")
     lines.append("")
     lines.append("## Reconciliation summary (this run)")
     lines.append("")
@@ -385,13 +489,17 @@ def write_report(pairs: pl.DataFrame, m: dict, recon_summary: dict) -> tuple[Pat
 
     md_path.write_text("\n".join(lines) + "\n")
 
-    json_out = dict(m)
-    json_out["captured_at_utc"] = ts.isoformat()
-    json_out["n_pairs"] = pairs.height
-    json_out["scored_at_min"] = str(date_min)
-    json_out["scored_at_max"] = str(date_max)
-    json_out["bts_reference"] = bts
-    json_out["reconciliation"] = recon_summary
+    json_out = {
+        "captured_at_utc": ts.isoformat(),
+        "n_pairs": pairs.height,
+        "scored_at_min": str(date_min),
+        "scored_at_max": str(date_max),
+        "bts_reference": bts,
+        "overall": overall,
+        "buckets": buckets,
+        "bucket_order": _LAG_BUCKET_LABELS,
+        "reconciliation": recon_summary,
+    }
     json_path.write_text(json.dumps(json_out, indent=2, default=str))
 
     return md_path, json_path
@@ -403,11 +511,11 @@ def report() -> dict:
     pairs = pl.read_parquet(PAIRS_PATH)
     if pairs.height == 0:
         raise SystemExit("reconciled_pairs.parquet exists but is empty — nothing to report.")
-    m = compute_metrics(pairs)
+    metrics = compute_metrics(pairs)
     state = _load_state()
     last_run = state.get("runs", [{}])[-1] if state.get("runs") else {}
-    md_path, json_path = write_report(pairs, m, last_run)
-    return {"metrics": m, "md_path": md_path, "json_path": json_path, "n_pairs": pairs.height}
+    md_path, json_path = write_report(pairs, metrics, last_run)
+    return {"metrics": metrics, "md_path": md_path, "json_path": json_path, "n_pairs": pairs.height}
 
 
 def main(argv=None) -> int:
@@ -416,39 +524,39 @@ def main(argv=None) -> int:
 
     if action in ("reconcile", "all"):
         print("=" * 70)
-        print("Stage 1 — reconciling (prediction, actual_delayed) pairs")
+        print("Stage 1 — reconciling (prediction, actual_delayed) pairs, per lag bucket")
         print("=" * 70)
         summary = reconcile()
         print(f"new prediction snapshots folded in: {summary['new_prediction_snapshots']}")
         print(f"new gold snapshots checked:          {summary['new_gold_snapshots']}")
-        print(f"new pairs reconciled this run:       {summary['new_pairs']}")
+        print(f"new pairs reconciled this run:       {summary['new_pairs']}  {summary['new_pairs_by_bucket']}")
         print(f"predictions still pending an outcome: {summary['still_pending']}")
         print()
         print(f"TOTAL RECONCILED PAIRS: {summary['total_pairs']}")
         if summary["total_pairs"]:
+            print(f"BY BUCKET: {summary.get('total_by_bucket', {})}")
             print(f"DATE RANGE (scored_at, UTC): {summary['scored_at_min']} -> {summary['scored_at_max']}")
         print()
 
     if action in ("report", "all"):
         print("=" * 70)
-        print("Stage 2 — metrics (same family as BTS training) + calibration")
+        print("Stage 2 — metrics (same family as BTS training) + calibration, per bucket")
         print("=" * 70)
         out = report()
-        m = out["metrics"]
-        print(f"n = {out['n_pairs']}")
-        print(f"ROC-AUC:  {_fmt(m['roc_auc'])}")
-        print(f"PR-AUC:   {_fmt(m['pr_auc'])}")
-        print(f"F1:       {_fmt(m['f1'])}")
-        print(f"Accuracy: {_fmt(m['accuracy'])}")
-        print(f"Brier:    {_fmt(m['brier'])}")
-        print(f"Actual delay rate: {_fmt(m['actual_delay_rate'])}")
-        print(f"Confusion matrix: {m['confusion_matrix']}")
+        m = out["metrics"]["overall"]
+        print(f"OVERALL  n={out['n_pairs']}  ROC-AUC={_fmt(m['roc_auc'])}  PR-AUC={_fmt(m['pr_auc'])}  "
+              f"F1={_fmt(m['f1'])}  Brier={_fmt(m['brier'])}  actual_delay_rate={_fmt(m['actual_delay_rate'])}")
+        print(f"  confusion matrix: {m['confusion_matrix']}")
+        for label in _LAG_BUCKET_LABELS:
+            bm = out["metrics"]["buckets"][label]
+            print(f"[{label:>7}] n={bm['n']:<5} ROC-AUC={_fmt(bm['roc_auc'])}  PR-AUC={_fmt(bm['pr_auc'])}  "
+                  f"F1={_fmt(bm['f1'])}  Brier={_fmt(bm['brier'])}  actual_delay_rate={_fmt(bm['actual_delay_rate'])}")
         print()
         print(f"Report written: {out['md_path']}")
         print(f"JSON written:   {out['json_path']}")
 
     if action not in ("reconcile", "report", "all"):
-        print(f"usage: python -m aeroflux_ml.evaluate_live [reconcile|report|all]", file=sys.stderr)
+        print("usage: python -m aeroflux_ml.evaluate_live [reconcile|report|all]", file=sys.stderr)
         return 1
     return 0
 
