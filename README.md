@@ -1,71 +1,282 @@
-# AeroFlux — Stage 2 Development Prototype
-
 # AeroFlux
 
-Real-time flight-delay prediction and cyber-physical intelligence platform.
-Ingests FAA SWIM (+ ADS-B, weather), fuses it into a validated per-flight
-state, and produces ML features and predictions — with train/serve parity so a
-model trained on BTS history runs unchanged on live data.
+**Real-time flight-delay prediction over FAA SWIM + ADS-B + weather, with
+train/serve parity by construction.**
 
-## Structure
+🔗 **Live demo:** [aeroflux.duckdns.org](https://aeroflux.duckdns.org)
+
+---
+
+## Table of contents
+
+- [Problem](#problem)
+- [Solution](#solution)
+- [Sample input and output](#sample-input-and-output)
+- [Architecture](#architecture)
+- [Repository navigation](#repository-navigation)
+- [Setup](#setup)
+- [Running the system](#running-the-system)
+- [Datasets](#datasets)
+- [Reproducing results](#reproducing-results)
+- [Contributing and Repository Access](#contributing-and-repository-access)
+
+---
+
+## Problem
+
+The U.S. National Airspace System is a tightly-coupled physical network: an
+aircraft, a crew, and a gate are shared resources that get reused all day, so
+a disturbance at one airport doesn't stay local — it propagates through
+aircraft rotation and shared airport queues until it shows up as a delay
+somewhere else, hours later and states away. Predicting that propagation
+in real time, from live, incomplete, streaming data, is a harder and more
+general problem than predicting any single flight's delay from a clean
+historical record.
+
+AeroFlux is a proof-of-concept for that broader problem — **real-time
+perception of cascading state in a tightly-coupled physical system** — with
+flight-delay prediction as the concrete, measurable instance. The model
+treats aircraft rotation (which airframe flew the previous leg, and how
+late) as *one nullable signal channel* among several: airport demand,
+weather, and schedule form an always-available backbone that the prediction
+degrades onto gracefully when rotation can't be resolved from live data,
+rather than depending on it outright.
+
+## Solution
+
+AeroFlux fuses **live FAA SWIM** flight-plan/track messages with **ADS-B**
+(airframe identity) and **weather** (METAR/NCEI) into a validated per-flight
+state, in three tiers:
+
+- **Bronze** — raw SWIM messages, as received, with lineage.
+- **Silver** — fused, deduplicated, canonical per-flight state, keyed on
+  **GUFI** (not the mutable `flight_ref`).
+- **Gold** — the ML feature/label table, computed by **one** feature
+  contract (`aeroflux_ml/feature_prep.py`) shared by both training and
+  serving, so a model trained on years of historical BTS data runs
+  *unchanged* on live SWIM data — parity by construction, not convention.
+
+An **XGBoost** classifier scores gold features into a delay probability.
+Predictions and current flight state sync out to **S3 + DynamoDB**; an
+always-on **Streamlit** app (containerized, deployed on Lightsail behind
+Caddy/TLS, built and pushed by GitHub Actions) reads *only* from that cloud
+copy — never the local database — so the live demo stays up independent of
+whatever the local ingest machine is doing.
+
+All of this is a **config flip, not two codebases**: every storage call goes
+through a `StateRepository`/`LakeStore` abstraction
+(`aeroflux_ml/io.py`) selected by `STATE_BACKEND`/`LAKE_BACKEND` env vars —
+`postgres`/`local` (default, zero cloud dependency, what CI and local dev
+use) or `dynamodb`/`s3` (what the deployed app uses). The whole pipeline is
+container-first so it runs the same on a laptop and in the cloud.
+
+## Sample input and output
+
+**Input** — a raw FAA SWIM TFMS message (`fltdMessage`, abridged):
+
+```xml
+<fdm:fltdMessage acid="SWA2606" airline="SWA" depArpt="KMCO" arrArpt="KBNA"
+                  flightRef="153371795" msgType="trackInformation"
+                  sourceTimeStamp="2026-07-31T21:02:50Z">
+  <fdm:trackInformation>
+    <nxcm:qualifiedAircraftId aircraftCategory="JET" userCategory="COMMERCIAL">
+      <nxce:aircraftId>SWA2606</nxce:aircraftId>
+      <nxce:gufi>KJ5957868p</nxce:gufi>
+      <nxce:departurePoint><nxce:airport>KMCO</nxce:airport></nxce:departurePoint>
+      <nxce:arrivalPoint><nxce:airport>KBNA</nxce:airport></nxce:arrivalPoint>
+    </nxcm:qualifiedAircraftId>
+    <nxcm:position>...</nxcm:position>
+    <nxcm:ncsmTrackData>
+      <nxcm:eta etaType="ESTIMATED" timeValue="2026-07-31T21:31:02Z"/>
+    </nxcm:ncsmTrackData>
+  </fdm:trackInformation>
+</fdm:fltdMessage>
+```
+
+**Fused into canonical silver state** (`flight_instance`, one row per
+flight — see `AeroFlux_DataSchemas.md` §1 for the full schema):
+
+```json
+{
+  "flight_instance_id": "KJ5957868p", "gufi": "KJ5957868p",
+  "callsign": "SWA2606", "flight_number": "WN2606",
+  "carrier_icao": "SWA", "carrier_name": "Southwest Airlines",
+  "origin": "KMCO", "destination": "KBNA",
+  "scheduled_gate_departure": "2026-07-31T19:45:00Z",
+  "scheduled_gate_arrival": "2026-07-31T21:44:00Z",
+  "estimated_arrival": "2026-07-31T21:31:02Z",
+  "actual_off": "2026-07-31T20:02:00Z", "actual_on": null,
+  "flight_status": "ACTIVE",
+  "tail_number": null, "tail_source": "none", "hex": null
+}
+```
+
+**Scored into a prediction** (`predictions`, joined on `flight_key` =
+`flight_instance_id` — see `AeroFlux_DataSchemas.md` §2):
+
+```json
+{
+  "flight_key": "KJ5957868p",
+  "delay_probability": 0.82,
+  "predicted_delayed": 1,
+  "model_version": "xgb_v2",
+  "feature_version": "fe_v1",
+  "scored_at": "2026-07-31T21:05:00Z"
+}
+```
+
+## Architecture
+
+![AeroFlux architecture diagram](images/design/aeroflux2-arch-v2.png)
+
+*(Source draw.io file: `arch_diagrams/aeroflux_architecture-final.drawio` —
+exported PNG/SVG lands in `images/design/`.)*
+
+Left to right: **live sources** (SWIM, ADS-B, METAR/NCEI) feed a Kafka
+bridge into **bronze** (raw Postgres), which is fused into **silver**
+(canonical per-flight state, Postgres). In parallel, **historical BTS**
+data + cached weather feed the same feature contract for **training**. Both
+paths converge on **gold** (Parquet feature tables), which either trains the
+XGBoost model or gets scored by it live. A `sync_cloud.py` step pushes gold
+to **S3** and current state + predictions to **DynamoDB**; the deployed
+**Streamlit app** reads only from that cloud copy. The **local/cloud split**
+is the config toggle described above — everything left of `sync_cloud.py`
+runs on the local ingest machine regardless of backend; everything reading
+through `data_access.py` (the Streamlit app) is backend-aware and reads
+whichever store is configured.
+
+## Repository navigation
 
 ```
 aeroflux/
-├── run.sh                 # single entry point (setup / ingest / pipeline)
-├── compose.yaml           # infra: Kafka + Postgres
-├── .env.example           # config template (copy to .env, fill secrets)
-├── schema.sql             # swim.raw_messages (bronze) DDL
-├── swim_to_kafka.py       # SWIM -> Kafka bridge
-├── kafka_to_postgres.py   # Kafka -> Postgres consumer
-├── check_setup.py         # connectivity preflight
-├── inspect_postgres.py    # DB inspection helper
-├── aeroflux_parser/       # PACKAGE: parse -> fuse -> resolve -> validate (silver)
-│   └── data/airlines.csv  #   bundled ICAO<->IATA airline crosswalk
-├── aeroflux_ml/           # PACKAGE: feature engineering + inference (gold)
-├── scripts/               # parser CLIs: build_dataset, build_features, ...
-├── configs/pipeline.yaml  # ML feature/model config
-├── spark/streaming_job.py # streaming wrapper (scaffold)
-├── tests/                 # test_parse.py + test_ml.py (66 tests)
-└── samples/               # sample SWIM XML
+├── aeroflux_parser/        # SWIM parse -> fuse -> resolve -> validate (silver)
+│   ├── fusion.py, identity.py    #   GUFI-keyed fusion, carrier/tail resolution
+│   └── adsb.py, adsb_store.py    #   ADS-B airframe identity (rolling store)
+├── aeroflux_ml/             # the ML side
+│   ├── feature_prep.py           #   THE feature contract — fill policy, parity set
+│   ├── schema.py                 #   from_bts()/from_silver() -> one canonical frame
+│   ├── io.py                     #   StateRepository/LakeStore — the cloud storage seam
+│   ├── sync_cloud.py             #   local -> cloud sync (gold, state, predictions, eval)
+│   ├── score_live.py             #   scores live gold -> predictions
+│   ├── evaluate_live.py          #   reconciles live predictions against outcomes
+│   ├── weather.py, weather_cache.py  # live METAR + cached historical NCEI
+│   ├── bts_source.py             #   BTS fetch/cache/discover-local-CSV
+│   ├── pipeline.py, run.py       #   silver -> gold pipeline + CLI
+│   └── training/                 #   config-driven training pipeline (see below)
+├── aeroflux_ui/streamlit_app/   # the demo UI
+│   ├── app.py, data_access.py    #   entry point; cloud-aware reads (local/S3+DynamoDB)
+│   └── pages/                    #   Live Map, Analyst (agent chat), Live Inference,
+│                                  #   Model Performance (live eval + feature importances)
+├── scripts/                 # build_bts_gold.py, sync_cloud.sh, aws_setup.sh,
+│                             #   smoke_cloud_backends.py, baseline_metrics.sh
+├── configs/                 # pipeline.yaml, training.yaml
+├── run.sh                   # live ingestion orchestrator (setup/stream/status/stop)
+├── e2e.sh                   # full train -> serve -> sync -> UI orchestration
+└── tests/                   # 97 tests: parse, ML, training, sync, live-eval
 ```
 
-## Quickstart
+**Docs** (repo root): [`CLAUDE.md`](CLAUDE.md) — operational quick-reference
+and golden rules (start here for how the codebase is meant to be used);
+[`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — full mission, architecture
+decisions, current state, known limitations, roadmap;
+[`DEPLOYMENT.md`](DEPLOYMENT.md) — cloud storage config + Lightsail deploy
+flow, every gotcha hit getting there; [`AGENT_INTEGRATION.md`](AGENT_INTEGRATION.md)
+— the wire contract and production data-read path for the reasoning/agent
+layer; [`AeroFlux_DataSchemas.md`](AeroFlux_DataSchemas.md) — every dataset,
+its schema, and sample records; [`AeroFlux_DataDictionary.md`](AeroFlux_DataDictionary.md)
+— feature definitions and the train/live parity table.
 
-See **RUNGUIDE.md** for the full walkthrough (team onboarding + cloud). Short version:
+## Setup
+
+**Prerequisites:** Python 3.11 (3.10–3.12 supported per `pyproject.toml`),
+Docker + Docker Compose, and either Conda (`environment.yml`) or Poetry/pip
+for the `aeroflux` package itself.
 
 ```bash
-pip install -e .            # Make sure you run this while inside aeroflux dir
-cp .env.example .env        # fill in SWIM + Postgres values
-./run.sh setup              # infra up, topic, tables
-./run.sh all 3600           # ingest 1h, then raw -> silver -> load -> gold
+cd aeroflux
+python -m pip install -e .          # or: pip install poetry && poetry install
+cp .env.example .env                # fill in SWIM credentials + Postgres values
+./run.sh setup                      # Kafka + Postgres up, topic + tables created
 ```
 
-## Data layers
+That's local infra only — no cloud dependency, no AWS account needed to
+develop or run the tests.
 
-- **bronze** — raw SWIM messages + lineage (`swim.raw_messages`)
-- **silver** — fused, validated per-flight state (`flight_instance`)
-- **gold** — ML feature/label table (`out/gold_features.parquet`)
+**Cloud resources** (optional — only needed to sync to S3/DynamoDB or
+deploy the always-on app): `scripts/aws_setup.sh` provisions the S3 bucket,
+DynamoDB table, and IAM policies. Full env-var reference (`STATE_BACKEND`,
+`LAKE_BACKEND`, `S3_BUCKET`, `DYNAMODB_TABLE`, credentials) and the
+Lightsail deploy flow are in **[`DEPLOYMENT.md`](DEPLOYMENT.md)** — not
+duplicated here.
 
-## Tests
+## Running the system
 
 ```bash
-pip install -e ".[dev]" && pytest -q      # 66 tests
+# local-only (no cloud env vars set):
+./e2e.sh up             # train -> serve -> UI, everything local
+./e2e.sh health          # check every stage is actually running
+./e2e.sh down            # tear it all down
+
+# with cloud sync + the always-on deploy target (see DEPLOYMENT.md for the env vars):
+export STATE_BACKEND=dynamodb LAKE_BACKEND=s3 AWS_REGION=us-east-1 \
+       S3_BUCKET=<bucket> DYNAMODB_TABLE=aeroflux-current-state
+./e2e.sh up              # same command — now also syncs to S3/DynamoDB each cycle
 ```
 
-## Clean Up below 
+Individual stages, if you want to run/inspect one at a time (see `e2e.sh`
+and `run.sh` for the full command set): `cmd_ingest` (SWIM bridge +
+consumer + ADS-B poller), `cmd_score` (score live gold), `cmd_sync_cloud`
+(push to S3/DynamoDB), `cmd_archive` (retention), `cmd_ui` (Streamlit app).
 
-![AeroFlux flight map](images/aero-flux/flight-map-app_v2.png)
+**View the live app:** [aeroflux.duckdns.org](https://aeroflux.duckdns.org)
+(always-on, cloud-backed) or `http://localhost:8501` when running `e2e.sh
+up`/`cmd_ui` locally.
 
-## About AeroFlux Stage 2
+## Datasets
 
-AeroFlux Stage 2 is a development prototype for a scalable aviation-data platform focused on real-time flight-delay intelligence. The project expands on the historical machine-learning work completed during Stage 1 by introducing live data ingestion, data fusion, streaming analytics, and an extensible architecture for machine learning and agentic AI.
+| Source | Used for | Link |
+|---|---|---|
+| FAA SWIM (TFMS flight data) | Live flight plans, tracks, ETAs | [FAA SWIM](https://www.faa.gov/air_traffic/technology/swim) |
+| ADS-B (airplanes.live / adsb.lol) | Live airframe identity (hex, tail, type) for rotation | [airplanes.live](https://airplanes.live), [adsb.lol](https://adsb.lol) |
+| NOAA METAR (AWC) | Live weather (wind, visibility, IFR) | [aviationweather.gov](https://aviationweather.gov) |
+| NOAA NCEI | Cached historical weather (10-year training) | [ncei.noaa.gov](https://www.ncei.noaa.gov) |
+| BTS On-Time Performance | Historical training labels (true gate times, tail numbers) | [transtats.bts.gov](https://www.transtats.bts.gov/Fields.asp?gnoyr_VQ=FGJ) |
+| Airport / airline reference dims | ICAO/IATA crosswalks, names, timezones | bundled CSVs, `aeroflux_parser/data/` |
 
-This repository contains the source code, documentation, project proposal, architecture, and development environment for the Stage 2 prototype.
+**Retention:** the live pipeline keeps a rolling **48-hour** window (bronze
++ silver, Postgres) — this is a demo/cost choice, not a platform limit.
+BTS training data and the gold/lake parquet are persistent, not
+time-windowed.
 
-## Project Resources
+## Reproducing results
 
-- [AeroFlux Stage 2 Project Site](https://jonathanwilsonami.github.io/aero-flux-stage2-dev/)
-- [Project Proposal](https://jonathanwilsonami.github.io/aero-flux-stage2-dev/)
+To reproduce training end-to-end you need:
+
+1. **BTS training data** — `scripts/build_bts_gold.py` fetches and caches
+   it (public, no credentials needed, just bandwidth/time for a multi-year
+   pull); or point `--cache` at an existing local cache.
+2. **Cached weather** — `data/weather` (NCEI) and the station→ICAO bridge
+   (`data/reference/airport_to_station_2019.csv`), both bundled/fetchable.
+3. **Environment** — the Setup section above (`pip install -e .` /
+   `poetry install`); no cloud account needed for training or `pytest`.
+4. Then:
+   ```bash
+   python scripts/build_bts_gold.py --months 2015-01:2015-12 --cache data/bts \
+       --weather-cache data/weather --station-bridge data/reference/airport_to_station_2019.csv
+   python -m aeroflux_ml.training.cli train --config configs/training.yaml --gold <gold.parquet>
+   python -m pytest      # 97 tests
+   ```
+
+**What requires external access** (be aware before assuming a fully offline
+reproduction): a *live* run (`./run.sh stream` / `./e2e.sh up` without
+cloud vars) needs your own **FAA SWIM credentials** — SWIM access is
+account-gated by the FAA, not something this repo can provision for you.
+Syncing to the cloud or deploying the always-on app needs your own **AWS
+account** (S3 + DynamoDB + IAM, provisioned via `scripts/aws_setup.sh`) and
+a **Lightsail** (or equivalent) VM — see `DEPLOYMENT.md`. Training on BTS
+and running the test suite need neither.
+
+---
 
 ## Contributing and Repository Access
 
@@ -307,3 +518,4 @@ quarto publish gh-pages
 ```
 
 This will push the quarto site to Github.
+
