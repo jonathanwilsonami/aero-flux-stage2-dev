@@ -149,6 +149,35 @@ it, `build-and-push` still runs and succeeds on every push — only the SSH
 redeploy step is gated, so a manual `deploy.sh`/SSH `pull && up -d` always
 has a fresh image to grab regardless.
 
+**Fixed and verified working end-to-end (2026-08-12), after three real,
+stacked bugs — worth knowing if this ever silently breaks again:**
+1. `DEPLOY_ENABLED` had actually been added as a **repo Secret**, not a
+   Variable — `vars.DEPLOY_ENABLED` and `secrets.DEPLOY_ENABLED` are
+   separate namespaces, so the workflow's `vars.` check always read empty
+   and the `deploy` job skipped every single time, even though something
+   *named* `DEPLOY_ENABLED` existed. No error, no warning — a skipped job
+   shows zero log output, which is exactly why this went unnoticed for
+   as long as it did. Moved to Variables — fixed.
+2. The SSH script's `cd /opt/aeroflux` didn't match the box's real
+   directory (`/home/ubuntu/aeroflux-app`, per `deploy.sh`'s own
+   default) — would have failed even with the gate open. Fixed in
+   `deploy-ui.yml`.
+3. First real run of the `deploy` job (ever — it had only skipped before
+   this) failed with `ssh: this private key is passphrase protected`.
+   The local key file has no `Proc-Type: ENCRYPTED` header (genuinely not
+   passphrase-protected), so this was copy/paste corruption of the
+   `LIGHTSAIL_SSH_KEY` secret, not an actual passphrase — Go's SSH parser
+   reports "passphrase protected" as a generic fallback for a PEM it
+   can't cleanly parse. Re-pasted directly from a terminal `cat` into the
+   browser secret box (not through an editor/notes app that might
+   reformat line endings/quotes) — fixed.
+
+A `Deploy-gate diagnostics` step now runs unconditionally in
+`build-and-push` (unlike `deploy`, which shows nothing when skipped) and
+prints `DEPLOY_ENABLED`'s actual value plus whether the SSH secrets are
+present — check that step's log first if this ever regresses, before
+re-diagnosing from scratch.
+
 ## 7. Rollback
 
 ```bash

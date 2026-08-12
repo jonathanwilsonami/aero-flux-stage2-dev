@@ -25,7 +25,7 @@ serve on live SWIM, with **train/serve parity by construction**.
    (absence == 0) and leaves weather/recent-delay null (XGBoost routes NaN). Don't
    blanket-fill.
 5. **Real data over fixtures. Validate each layer before advancing. Tests pass
-   before moving on** (`python -m pytest`, currently 83 passing).
+   before moving on** (`python -m pytest`, currently 97 passing).
 6. **The default model feature set is 18 features, weather included.**
    `feature_prep.feature_columns()` (default `include_gap_weather=False`) = 5
    structural + 5 rotation/propagation + 4 demand/recent-delay + 4 weather
@@ -75,8 +75,17 @@ transcript.
     `LAKE_BACKEND` env vars through `state_backend_from_env()`/
     `lake_backend_from_env()` — see `DEPLOYMENT.md`
   - `sync_cloud.py` — local → cloud sync step (gold → LakeStore, current
-    state + predictions → StateStore); no-op unless a cloud backend is
-    selected
+    state + predictions → StateStore, deduped against a content-hash cache
+    — `SYNC_DEDUPE=1` default, see Gotchas); no-op unless a cloud backend
+    is selected. `sync_eval_outputs()` is a separate, much-lower-frequency
+    sync (live-eval JSON + reconciled pairs, called from
+    `evaluate_live.py`'s `report()`, not the per-cycle flight loop)
+  - `evaluate_live.py` — reconciles forward-captured live predictions
+    (`out/predictions/*.parquet`) against realized outcomes
+    (`out/gold_live/*.parquet`'s `arr_delay_min`) into
+    `out/eval/reconciled_pairs.parquet`, one row per (flight_key, lag
+    bucket) — see its module docstring for the guardrails and the
+    keep-latest-only bug this replaced
   - `training/` — configurable ML pipeline (see below)
 - `scripts/build_bts_gold.py` — BTS → gold training table
 - `scripts/sync_cloud.sh`, `scripts/smoke_cloud_backends.py` — cloud sync
@@ -84,7 +93,10 @@ transcript.
   trusting any cloud-backend change)
 - `configs/` — `pipeline.yaml`, `training.yaml`
 - `aeroflux_ui/streamlit_app/` — demo UI (Home, Live Map, Analyst, Live
-  Inference); reads through `data_access.py`, which reads through the same
+  Inference, **Model Performance** — live eval metrics/calibration/lag
+  buckets, DynamoDB item count via free `describe-table`, XGBoost feature
+  importances, glossary; cloud-aware like everything else); reads through
+  `data_access.py`, which reads through the same
   `state_backend_from_env()`/`lake_backend_from_env()` factories as
   everything else — Postgres/local by default, DynamoDB/S3 when deployed.
   Also: `Dockerfile`, `docker-compose.lightsail.yml`, `Caddyfile` (deploy
@@ -95,7 +107,8 @@ transcript.
 - `deploy.sh` (repo root) — manual build/push/deploy/rollback/status for the
   Lightsail app; `.github/workflows/deploy-ui.yml` — CI build+push (+ gated
   auto-deploy)
-- `tests/` — `test_ml.py`, `test_parse.py`, `test_training.py`
+- `tests/` — `test_ml.py`, `test_parse.py`, `test_training.py`,
+  `test_swim_reconnect.py`, `test_sync_dedupe.py`, `test_evaluate_live_buckets.py`
 
 ## Key commands
 ```bash
@@ -193,10 +206,15 @@ CV), `evaluate`, `compare`, `registry` (local runs + optional MLflow), `runner`,
   direction once writes were confirmed as the actual driver.
 
 ## Current state / next
-Milestones hit: live ingest, BTS↔live parity, cached-weather training, feature
-contract, training pipeline, live scoring, E2E orchestration, demo UI, cloud
-storage backends (S3/DynamoDB) with `data_access.py` reading through them,
-Lightsail deployment (Docker + Caddy + GHCR CI). 83 tests pass. See
-`PROJECT_CONTEXT.md` §Roadmap and `DEPLOYMENT.md` for the deploy flow. Next:
-evaluation work; the Spark batch analytics job and `AGENT_INTEGRATION.md` are
-still open from the original AWS-storage plan.
+Milestones hit: live ingest (self-healing — SWIM auto-reconnect, real
+liveness health check), BTS↔live parity, cached-weather training, feature
+contract, training pipeline, live scoring, E2E orchestration, demo UI (incl.
+Model Performance analyst page), cloud storage backends (S3/DynamoDB) with
+`data_access.py` reading through them and write cost cut ~18x, live-
+prediction evaluation (`evaluate_live.py`, per-lag-bucket), Lightsail
+deployment with fully automated CI deploy now verified working, and
+`AGENT_INTEGRATION.md`. 97 tests pass. See `PROJECT_CONTEXT.md` §Roadmap and
+`DEPLOYMENT.md` for the deploy flow. Next: the live-eval sample maturing
+(right-censored, self-correcting — don't trust today's AUC), the Spark batch
+analytics job (still open from the original AWS-storage plan), and wiring
+Ryan's agent against `AGENT_INTEGRATION.md`'s contract.
