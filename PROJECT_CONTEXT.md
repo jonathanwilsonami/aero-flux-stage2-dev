@@ -219,6 +219,38 @@ Caddyfile), `.github/workflows/deploy-ui.yml`, `tests/` (83 pass).
   missingness indicators (similar to the `include_gap_weather` indicator
   pattern) so the model can distinguish "genuinely low risk" from
   "features unknown" instead of conflating them.
+- **Live-prediction evaluation sample is still immature (right-censoring)**
+  — the forward-capture reconciliation (`aeroflux_ml/evaluate_live.py`)
+  currently shows ~1.9% actual delay rate and ~0.59 overall AUC on 4,577
+  reconciled pairs, far below BTS's ~18% base rate / ~0.88 AUC. Confirmed
+  (2026-08-12) this is NOT a reconciliation bug: the same ~2% rate appears
+  across all 5,788 completed flights in `gold_live`, not just the
+  reconciled subset. Root cause is right-censoring — 1,542,436 predictions
+  are still pending an outcome vs. 4,577 resolved, and severely delayed
+  flights take longer, in wall-clock time, to actually land, so they're
+  systematically under-represented among flights that have *resolved* so
+  far. Confirmed via percentile comparison against BTS: live's lower/
+  median `arr_delay_min` roughly tracks BTS, but the upper tail is
+  compressed (p90: live=0min vs. BTS=+34min; p99: live=+36min vs.
+  BTS=+187min) — the signature of censoring, not a shifted/wrong
+  distribution. Expected to self-correct as the pending backlog resolves
+  over the coming days; not a bug to fix, a sample-maturity issue to wait
+  out. Tracked live on the app's Model Performance page (pending vs.
+  resolved counts, per-lag-bucket table — accuracy-vs-prediction-horizon
+  will become visible there once each bucket has real volume).
+- **Live `arr_delay_min` uses ADS-B touchdown, not gate arrival — a
+  structural ~5–15min early bias.** `schema.py`'s `from_silver()` maps
+  `actual_arr` to `actual_on` (ADS-B wheels-on/touchdown), while
+  `from_bts()`'s `actual_arr` is BTS's `ARR_TIME` (actual *gate* arrival).
+  These are different physical events — touchdown precedes gate arrival by
+  taxi-in time — and live silver has no gate-arrival timestamp at all
+  (`_FLIGHT_INSTANCE_COLS` only carries `actual_off`/`actual_on`, both
+  ADS-B runway events). Confirmed (2026-08-12) this is real but secondary:
+  the percentile-shape evidence above shows the dominant gap is censoring,
+  not a uniform offset (a pure taxi-time bias would shift the whole curve,
+  not truncate just the tail) — but it does nudge every live delay
+  measurement slightly early. Not fixable without live gate-arrival data,
+  which SWIM/ADS-B doesn't provide.
 
 ---
 
