@@ -159,7 +159,7 @@ build/push/deploy/rollback), `compose.yaml` (Kafka+Postgres), `schema.sql`,
 `scripts/` (build_bts_gold, build_dataset, sync_cloud.sh,
 smoke_cloud_backends.py, …), `configs/` (pipeline.yaml, training.yaml),
 `aeroflux_ui/streamlit_app/` (Dockerfile, docker-compose.lightsail.yml,
-Caddyfile), `.github/workflows/deploy-ui.yml`, `tests/` (83 pass).
+Caddyfile), `.github/workflows/deploy-ui.yml`, `tests/` (97 pass).
 
 **Docs:** `CLAUDE.md`, this file, `AeroFlux_DataSchemas.md`,
 `AeroFlux_DataDictionary.md`, `DEPLOYMENT.md`, `E2E_RUNBOOK.md`, `RUNGUIDE.md`,
@@ -169,7 +169,7 @@ Caddyfile), `.github/workflows/deploy-ui.yml`, `tests/` (83 pass).
 
 ## 5. Current state
 
-- **83 tests passing** across parse, ML, and training.
+- **97 tests passing** across parse, ML, and training.
 - **Live coverage** (grows with poller uptime): hex ~38%, GUFI ~49%, tail ~52%,
   aircraft_type ~72%, airline-resolved ~78%. Rotation features live.
 - **Weather** validated both ways: live METAR (thousands of obs/run) and cached
