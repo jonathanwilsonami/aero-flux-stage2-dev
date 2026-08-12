@@ -1,0 +1,124 @@
+<mxfile host="app.diagrams.net" agent="AeroFlux">
+  <diagram id="aeroflux-arch" name="AeroFlux Architecture">
+    <mxGraphModel dx="1414" dy="823" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="train_grp" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEEDFE;strokeColor=#534AB7;verticalAlign=top;fontStyle=1;fontColor=#26215C;arcSize=6;spacingTop=6;container=1;collapsible=0;" value="Offline training (continuous retraining)" vertex="1">
+          <mxGeometry height="120" width="520" x="370" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="bts" parent="train_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1EFE8;strokeColor=#5F5E5A;fontColor=#2C2C2A;arcSize=12;" value="BTS data&lt;br&gt;(11-yr historical, continuous)" vertex="1">
+          <mxGeometry height="60" width="140" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="modeltrain" parent="train_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CECBF6;strokeColor=#534AB7;fontColor=#26215C;arcSize=12;" value="XGBoost + SparkML GBT&#xa;train &amp; tune" vertex="1">
+          <mxGeometry height="60" width="150" x="190" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="registry" parent="train_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CECBF6;strokeColor=#534AB7;fontColor=#26215C;arcSize=12;" value="Model registry&#xa;current_model.joblib" vertex="1">
+          <mxGeometry height="60" width="140" x="360" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="e_bts_train" edge="1" parent="train_grp" source="bts" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#5F5E5A;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="modeltrain">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_train_reg" edge="1" parent="train_grp" source="modeltrain" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#5F5E5A;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="registry">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="sources" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1EFE8;strokeColor=#5F5E5A;fontColor=#2C2C2A;arcSize=10;verticalAlign=middle;" value="Live data sources&#xa;FAA SWIM · ADS-B · weather (NCEI/METAR)" vertex="1">
+          <mxGeometry height="60" width="300" x="5" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="local_grp" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F1FB;strokeColor=#185FA5;verticalAlign=top;fontStyle=1;fontColor=#042C53;arcSize=4;spacingTop=6;container=1;collapsible=0;" value="Local machine — streaming, fusion, ML scoring" vertex="1">
+          <mxGeometry height="260" width="880" x="40" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="kafka" parent="local_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F5EE;strokeColor=#0F6E56;fontColor=#04342C;arcSize=12;" value="Apache Kafka&#xa;bronze ingest" vertex="1">
+          <mxGeometry height="60" width="170" x="30" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="pg" parent="local_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F5EE;strokeColor=#0F6E56;fontColor=#04342C;arcSize=12;" value="Postgres&#xa;silver fusion (GUFI)" vertex="1">
+          <mxGeometry height="60" width="170" x="250" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="gold" parent="local_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F5EE;strokeColor=#0F6E56;fontColor=#04342C;arcSize=12;" value="Polars → gold&#xa;feature_prep contract" vertex="1">
+          <mxGeometry height="60" width="170" x="470" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="score" parent="local_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CECBF6;strokeColor=#534AB7;fontColor=#26215C;arcSize=12;" value="XGBoost scoring&#xa;delay probability" vertex="1">
+          <mxGeometry height="60" width="170" x="250" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="evallive" parent="local_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CECBF6;strokeColor=#534AB7;fontColor=#26215C;arcSize=12;" value="evaluate_live (loop)&#xa;reconcile vs. outcomes" vertex="1">
+          <mxGeometry height="60" width="170" x="470" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="synccloud" parent="local_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAEEDA;strokeColor=#854F0B;fontColor=#412402;arcSize=8;" value="sync_cloud — change-detection dedup&#xa;(writer credentials: aeroflux-local)" vertex="1">
+          <mxGeometry height="130" width="180" x="670" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e_k_pg" edge="1" parent="local_grp" source="kafka" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#0F6E56;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="pg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pg_gold" edge="1" parent="local_grp" source="pg" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#0F6E56;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="gold">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_gold_score" edge="1" parent="local_grp" source="gold" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#534AB7;strokeWidth=1.5;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="evallive">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_gold_score2" edge="1" parent="local_grp" source="pg" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#534AB7;strokeWidth=1.5;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="score">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_score_sync" edge="1" parent="local_grp" source="score" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#854F0B;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="synccloud">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_reg_score" edge="1" parent="1" source="registry" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#534AB7;strokeWidth=1.5;dashed=1;" target="score">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_src_kafka" edge="1" parent="1" source="sources" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#5F5E5A;strokeWidth=1.5;" target="kafka">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aws_acct" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#232F3E;dashed=1;verticalAlign=top;fontStyle=1;fontColor=#232F3E;arcSize=2;spacingTop=6;container=1;collapsible=0;" value="AWS Account" vertex="1">
+          <mxGeometry height="720" width="880" x="40" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="iam_grp" parent="aws_acct" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#C7131F;dashed=1;verticalAlign=top;fontStyle=1;fontColor=#C7131F;arcSize=2;spacingTop=6;container=1;collapsible=0;" value="IAM &amp; Identity Center (SSO) — least-privilege roles" vertex="1">
+          <mxGeometry height="650" width="820" x="30" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="storage_grp" parent="iam_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EAF3DE;strokeColor=#3B6D11;verticalAlign=top;fontStyle=1;fontColor=#173404;arcSize=4;spacingTop=6;container=1;collapsible=0;" value="Cloud storage" vertex="1">
+          <mxGeometry height="150" width="760" x="30" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" parent="storage_grp" style="sketch=0;html=1;fillColor=#277116;strokeColor=none;fontColor=#ffffff;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.simple_storage_service;labelPosition=center;spacingTop=6;" value="Amazon S3&#xa;gold lake + eval metrics" vertex="1">
+          <mxGeometry height="90" width="90" x="120" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="ddb" parent="storage_grp" style="sketch=0;html=1;fillColor=#3334B9;strokeColor=none;fontColor=#ffffff;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;labelPosition=center;spacingTop=6;" value="DynamoDB&#xa;state + predictions (48h TTL)" vertex="1">
+          <mxGeometry height="90" width="90" x="520" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="serve_grp" parent="iam_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAECE7;strokeColor=#993C1D;verticalAlign=top;fontStyle=1;fontColor=#4A1B0C;arcSize=4;spacingTop=6;container=1;collapsible=0;" value="AWS Lightsail — always-on serving (reader credentials: aeroflux-app)" vertex="1">
+          <mxGeometry height="380" width="760" x="30" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="streamlit" parent="serve_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5C4B3;strokeColor=#993C1D;fontColor=#4A1B0C;arcSize=10;" value="Streamlit app (Docker)&#xa;read-only cloud reads" vertex="1">
+          <mxGeometry height="70" width="220" x="60" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="caddy" parent="serve_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5C4B3;strokeColor=#993C1D;fontColor=#4A1B0C;arcSize=10;" value="Caddy&#xa;HTTPS / TLS reverse proxy" vertex="1">
+          <mxGeometry height="70" width="220" x="480" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="agent" parent="serve_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1EFE8;strokeColor=#5F5E5A;fontColor=#2C2C2A;dashed=1;arcSize=8;" value="Agent (Docker, planned)&#xa;RAG + LLM API · reads S3/DynamoDB via SSO read-only" vertex="1">
+          <mxGeometry height="70" width="400" x="60" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="users" parent="serve_grp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1EFE8;strokeColor=#5F5E5A;fontColor=#2C2C2A;arcSize=10;" value="Users&#xa;duckdns.org (HTTPS)" vertex="1">
+          <mxGeometry height="70" width="220" x="480" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="e_str_caddy" edge="1" parent="serve_grp" source="streamlit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#993C1D;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="caddy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_str_agent" edge="1" parent="serve_grp" source="streamlit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#5F5E5A;strokeWidth=1.5;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="agent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_caddy_users" edge="1" parent="serve_grp" source="caddy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#993C1D;strokeWidth=1.5;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_sync_s3" edge="1" parent="1" source="synccloud" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#854F0B;strokeWidth=1.5;" target="s3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_sync_ddb" edge="1" parent="1" source="synccloud" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#854F0B;strokeWidth=1.5;" target="ddb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_s3_str" edge="1" parent="1" source="s3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#3B6D11;strokeWidth=1.5;" target="streamlit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ddb_str" edge="1" parent="1" source="ddb" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=open;endFill=0;strokeColor=#185FA5;strokeWidth=1.5;" target="streamlit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
