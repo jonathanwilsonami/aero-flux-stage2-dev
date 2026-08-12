@@ -26,6 +26,11 @@ actually changed since last sync, and was synced recently enough to still
 be within DYNAMODB_REFRESH_HOURS, is skipped rather than re-written every
 cycle. See filter_changed()'s docstring for the TTL-safety guarantee this
 relies on. SYNC_DEDUPE=0 restores the old every-row-every-cycle behavior.
+
+sync_eval_outputs() is a separate, much lower-frequency sync (live-
+evaluation JSON + reconciled pairs, called from evaluate_live.py's
+report() every few hours) — not part of the SYNC_EVERY flight-state loop
+above. See its own docstring.
 """
 
 from __future__ import annotations
@@ -243,6 +248,44 @@ def sync_once(*, gold_path: str, predictions_path: str, dsn: str,
     })
     lake.write_parquet(marker, "meta/sync_status.parquet")
     return summary
+
+
+def sync_eval_outputs(eval_dir: str = "out/eval") -> dict:
+    """Sync the live-evaluation outputs (live_metrics_latest.json,
+    reconciled_pairs.parquet) to the lake, so the deployed app's Model
+    Performance page can read real data instead of "no data yet."
+
+    Deliberately separate from sync_once()'s per-cycle flight-state sync —
+    called from evaluate_live.py's report() step (every few hours, whenever
+    the eval loop actually produces a fresh report), not from the
+    SYNC_EVERY flight sync loop. These files are small (reconciled_pairs
+    was ~200KB at 4,577 rows) and infrequent, so there's no tension with
+    the write-volume-cost work in sync_once()/filter_changed() — this is a
+    handful of writes every few hours, not tens of thousands every cycle.
+
+    No-op (like sync_once) when both backends are local, and best-effort:
+    a sync failure here is logged and swallowed by the caller, never
+    allowed to break local report generation, which must keep working
+    with zero cloud credentials.
+    """
+    if is_local_only():
+        return {"synced": False, "reason": "local-only"}
+    lake = lake_backend_from_env()
+    synced: dict[str, int | bool] = {}
+
+    metrics_path = os.path.join(eval_dir, "live_metrics_latest.json")
+    if os.path.exists(metrics_path):
+        with open(metrics_path, "rb") as f:
+            lake.write_bytes(f.read(), "eval/live_metrics_latest.json")
+        synced["live_metrics_latest.json"] = True
+
+    pairs_path = os.path.join(eval_dir, "reconciled_pairs.parquet")
+    if os.path.exists(pairs_path):
+        df = pl.read_parquet(pairs_path)
+        lake.write_parquet(df, "eval/reconciled_pairs.parquet")
+        synced["reconciled_pairs.parquet_rows"] = df.height
+
+    return {"synced": bool(synced), "files": synced}
 
 
 def main(argv=None) -> int:

@@ -1,11 +1,19 @@
 """Model Performance & Data Quality — analyst-facing, read-only.
 
-Read-only and additive by design: reads out/eval/live_metrics_latest.json
-(written by `python -m aeroflux_ml.evaluate_live`), the local model
-artifact, the latest gold_live snapshot, and — for DynamoDB record count —
-the FREE `describe-table` ItemCount only. Never issues a DynamoDB Scan,
-never touches sync_cloud.py, never writes anything. Every read is cached
-(30 min) so this page adds no meaningful load to the running pipeline.
+Read-only and additive by design: reads live_metrics_latest.json (written
+by `python -m aeroflux_ml.evaluate_live`), the local model artifact, the
+latest gold_live snapshot, and — for DynamoDB record count — the FREE
+`describe-table` ItemCount only. Never issues a DynamoDB Scan, never
+touches the per-cycle flight sync, never writes anything itself. Every
+read is cached (30 min) so this page adds no meaningful load.
+
+Cloud-aware: on the deployed app (STATE_BACKEND=dynamodb or a real DSN —
+same is_live() check data_access.py uses), the live-evaluation JSON and
+reconciled pairs are read from the lake (evaluate_live.py's report() step
+syncs them there — see sync_cloud.sync_eval_outputs()) instead of the
+local out/eval/ files, which don't exist on the box. Everything else
+(gold_live hex-coverage proxy) stays local-only and degrades gracefully
+where it isn't available.
 
 Live-evaluation metrics here are early and still stabilizing as more
 snapshots reconcile — see the banner below before treating any number here
@@ -21,6 +29,8 @@ from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+from data_access import is_live
 
 st.set_page_config(page_title="AeroFlux · Model Performance", page_icon="📐", layout="wide")
 st.title("📐 Model Performance & Data Quality")
@@ -49,6 +59,13 @@ _RUN_DIR_FILE = _OUT_DIR / ".current_run_dir"
 
 @st.cache_data(ttl=1800)
 def load_live_metrics() -> dict | None:
+    if is_live():
+        try:
+            from aeroflux_ml import lake_backend_from_env
+            raw = lake_backend_from_env().read_bytes("eval/live_metrics_latest.json")
+            return json.loads(raw)
+        except Exception:
+            return None
     p = _EVAL_DIR / "live_metrics_latest.json"
     if not p.exists():
         return None
@@ -58,18 +75,15 @@ def load_live_metrics() -> dict | None:
         return None
 
 
-@st.cache_data(ttl=1800)
-def load_pending_count() -> int | None:
+def _pending_count(metrics: dict) -> int | None:
     """Predictions still awaiting a resolved outcome — the denominator that
-    makes the right-censoring caveat below concrete rather than generic."""
-    p = _EVAL_DIR / "_pending_predictions.parquet"
-    if not p.exists():
-        return None
-    try:
-        import polars as pl
-        return int(pl.scan_parquet(p).select(pl.len()).collect().item())
-    except Exception:
-        return None
+    makes the right-censoring caveat below concrete rather than generic.
+    Pulled from the reconciliation summary already embedded in
+    live_metrics_latest.json (evaluate_live.py's last reconcile() run),
+    not a separate file read — works identically local or cloud, and
+    avoids needing to sync the (much larger) pending-predictions cache."""
+    recon = metrics.get("reconciliation") or {}
+    return recon.get("still_pending")
 
 
 def _fmt(x) -> str:
@@ -99,7 +113,7 @@ else:
                f"{metrics.get('scored_at_min', 'N/A')} → {metrics.get('scored_at_max', 'N/A')}")
 
     n_resolved = metrics.get("n_pairs", 0)
-    n_pending = load_pending_count()
+    n_pending = _pending_count(metrics)
     overall = metrics.get("overall", {})
     delay_rate = overall.get("actual_delay_rate")
 
@@ -277,14 +291,22 @@ def load_latest_gold_snapshot_stats() -> dict | None:
 
 @st.cache_data(ttl=1800)
 def load_today_delay_rate() -> dict | None:
-    pairs_path = _EVAL_DIR / "reconciled_pairs.parquet"
-    if not pairs_path.exists():
-        return None
     import polars as pl
-    try:
-        df = pl.read_parquet(pairs_path, columns=["outcome_observed_at_utc", "actual_delayed"])
-    except Exception:
-        return None
+    cols = ["outcome_observed_at_utc", "actual_delayed"]
+    if is_live():
+        try:
+            from aeroflux_ml import lake_backend_from_env
+            df = lake_backend_from_env().read_parquet("eval/reconciled_pairs.parquet").select(cols)
+        except Exception:
+            return None
+    else:
+        pairs_path = _EVAL_DIR / "reconciled_pairs.parquet"
+        if not pairs_path.exists():
+            return None
+        try:
+            df = pl.read_parquet(pairs_path, columns=cols)
+        except Exception:
+            return None
     if df.height == 0:
         return None
     today = datetime.now(timezone.utc).date()

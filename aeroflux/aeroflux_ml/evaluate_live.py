@@ -515,7 +515,18 @@ def report() -> dict:
     state = _load_state()
     last_run = state.get("runs", [{}])[-1] if state.get("runs") else {}
     md_path, json_path = write_report(pairs, metrics, last_run)
-    return {"metrics": metrics, "md_path": md_path, "json_path": json_path, "n_pairs": pairs.height}
+    result = {"metrics": metrics, "md_path": md_path, "json_path": json_path, "n_pairs": pairs.height}
+
+    # Best-effort cloud sync of the small eval outputs, so the deployed
+    # app's Model Performance page has real data — never allowed to break
+    # local report generation (must keep working with zero cloud creds).
+    try:
+        from .sync_cloud import sync_eval_outputs
+        result["cloud_sync"] = sync_eval_outputs(eval_dir=str(OUT_DIR))
+    except Exception as e:
+        result["cloud_sync"] = {"synced": False, "error": str(e)}
+
+    return result
 
 
 def main(argv=None) -> int:
@@ -554,6 +565,13 @@ def main(argv=None) -> int:
         print()
         print(f"Report written: {out['md_path']}")
         print(f"JSON written:   {out['json_path']}")
+        cs = out.get("cloud_sync", {})
+        if cs.get("synced"):
+            print(f"Cloud sync:     {cs.get('files')}")
+        elif cs.get("reason") == "local-only":
+            print("Cloud sync:     skipped (STATE_BACKEND=postgres, LAKE_BACKEND=local)")
+        elif "error" in cs:
+            print(f"Cloud sync:     FAILED ({cs['error']}) — local report unaffected")
 
     if action not in ("reconcile", "report", "all"):
         print("usage: python -m aeroflux_ml.evaluate_live [reconcile|report|all]", file=sys.stderr)
