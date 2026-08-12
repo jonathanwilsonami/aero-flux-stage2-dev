@@ -24,8 +24,11 @@ cd "$ROOT"
 : "${GOLD_ARCHIVE:=$ROOT/out/gold_live}"
 : "${DURATION:=172800}"                   # 48h; 'continuous' loops forever
 : "${SCORE_EVERY:=60}"
-: "${SYNC_EVERY:=300}"                    # matches run.sh's REFRESH_SECONDS default —
-                                           # no point syncing more often than gold refreshes
+: "${SYNC_EVERY:=600}"                    # was 300 — Cost Explorer confirmed DynamoDB write
+                                           # volume (not reads) drove the bill, so this halves
+                                           # sync cycle frequency on top of the dedup in
+                                           # sync_cloud.py. Still configurable; no point syncing
+                                           # more often than gold refreshes (run.sh REFRESH_SECONDS)
 : "${UI_PORT:=8501}"
 : "${RUN_DIR_FILE:=$ROOT/out/.current_run_dir}"
 : "${MODEL_LINK:=$ROOT/out/current_model.joblib}"
@@ -102,7 +105,8 @@ cmd_sync_cloud(){
   # so downstream defaults (region, table name, ttl hours, backend choice)
   # still apply correctly.
   for v in STATE_BACKEND LAKE_BACKEND AWS_REGION AWS_PROFILE S3_BUCKET S3_PREFIX \
-           DYNAMODB_TABLE DYNAMODB_TTL_HOURS AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+           DYNAMODB_TABLE DYNAMODB_TTL_HOURS AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
+           SYNC_DEDUPE DYNAMODB_REFRESH_HOURS; do
     [ -n "${!v:-}" ] && export "$v"
   done
   ( while true; do

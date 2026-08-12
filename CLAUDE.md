@@ -106,14 +106,14 @@ python scripts/build_bts_gold.py --months 2015-01:2015-12 --cache data/bts \
 python -m aeroflux_ml.training.cli train --config configs/training.yaml --gold <gold.parquet>
 python -m aeroflux_ml.score_live --run-dir <run> --gold out/gold_features.parquet --out out/predictions.parquet
 ./e2e.sh up | health | down                      # everything, with health checks (FORCE=1 up to replace a running stack)
-python -m pytest                                 # 83 tests
+python -m pytest                                 # 91 tests
 export DSN="postgresql://aeroflux:aeroflux-db@localhost:5432/aeroflux"
 
 # Cloud backends (local Postgres/filesystem by default — opt in via env, fully reversible):
 export STATE_BACKEND=dynamodb LAKE_BACKEND=s3 AWS_PROFILE=aeroflux-local \
        AWS_REGION=us-east-1 S3_BUCKET=<bucket> DYNAMODB_TABLE=aeroflux-current-state
 python scripts/smoke_cloud_backends.py                    # verify creds/perms before trusting anything else
-./scripts/sync_cloud.sh                                    # one local->cloud sync cycle
+./scripts/sync_cloud.sh                                    # one local->cloud sync cycle (SYNC_DEDUPE=1 by default)
 ./e2e.sh up                                                 # same env vars -> live stack syncs to cloud too
 ```
 
@@ -174,6 +174,23 @@ CV), `evaluate`, `compare`, `registry` (local runs + optional MLflow), `runner`,
 - **`python:3.11-slim` has no `curl`** — `HEALTHCHECK CMD curl ...` reports
   "unhealthy" forever despite the app genuinely serving traffic. Use stdlib
   `python -c "import urllib.request; ..."` instead.
+- **A real ~$29 DynamoDB bill turned out to be WRITES, not the Scan
+  pattern** — Cost Explorer confirmed it: `sync_cloud.py` was upserting
+  every tracked flight's state + prediction (~30-48K items) every
+  `SYNC_EVERY` cycle (300s) regardless of whether anything had actually
+  changed, and writes cost 5x reads ($1.25/M WRU vs $0.25/M RRU). Fixed
+  with a local content-hash cache (`SYNC_DEDUPE=1`, default) —
+  `filter_changed()` in `sync_cloud.py` skips a flight's upsert only if
+  it's both unchanged AND was synced within `DYNAMODB_REFRESH_HOURS`
+  (default 12h) — the refresh floor exists so a genuinely-static-but-still-
+  current flight (e.g. PLANNED, hours before departure) doesn't silently
+  fall out of DynamoDB when its TTL lapses from never being re-written.
+  Verified live: two back-to-back cycles went from 47,806/17,489
+  (state/prediction) written to 0/0 once the cache was warm. `SYNC_EVERY`
+  default is now 600s (was 300s) for the same reason. A GSI (Scan ->
+  Query) was evaluated and explicitly NOT built for this — it would have
+  roughly doubled write cost (every upsert also writes the GSI), the wrong
+  direction once writes were confirmed as the actual driver.
 
 ## Current state / next
 Milestones hit: live ingest, BTS↔live parity, cached-weather training, feature
