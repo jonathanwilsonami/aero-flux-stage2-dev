@@ -20,6 +20,8 @@ website:
         text: "About"
       - href: aeroflux_stage2_proposal.qmd
         text: "Project Proposal"
+      - href: aeroflux-final-paper.qmd
+        text: "Final Paper"
 
 format:
   html:

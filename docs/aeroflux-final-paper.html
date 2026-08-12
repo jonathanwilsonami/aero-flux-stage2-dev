@@ -8,7 +8,7 @@
 
 <meta name="author" content="Jonathan Wilson">
 <meta name="author" content="Ryan Sollom">
-<meta name="dcterms.date" content="2026-07-18">
+<meta name="dcterms.date" content="2026-08-20">
 
 <title>AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence – AeroFlux Stage 2 Project</title>
 <style>
@@ -163,11 +163,11 @@ div.csl-indent {
 <span class="menu-text">About</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link active" href="./aeroflux_stage2_proposal.html" aria-current="page"> 
+    <a class="nav-link" href="./aeroflux_stage2_proposal.html"> 
 <span class="menu-text">Project Proposal</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="./aeroflux-final-paper.html"> 
+    <a class="nav-link active" href="./aeroflux-final-paper.html" aria-current="page"> 
 <span class="menu-text">Final Paper</span></a>
   </li>  
 </ul>
@@ -186,16 +186,49 @@ div.csl-indent {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction"><span class="header-section-number">1</span> Introduction</a></li>
+  <li><a href="#abstract" id="toc-abstract" class="nav-link active" data-scroll-target="#abstract">Abstract</a></li>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link" data-scroll-target="#introduction"><span class="header-section-number">1</span> Introduction</a>
+  <ul class="collapse">
+  <li><a href="#problem-statement" id="toc-problem-statement" class="nav-link" data-scroll-target="#problem-statement"><span class="header-section-number">1.1</span> Problem Statement</a></li>
+  <li><a href="#sec-contribution" id="toc-sec-contribution" class="nav-link" data-scroll-target="#sec-contribution"><span class="header-section-number">1.2</span> Contribution</a></li>
+  <li><a href="#scope" id="toc-scope" class="nav-link" data-scroll-target="#scope"><span class="header-section-number">1.3</span> Scope</a></li>
+  <li><a href="#technical-challenges" id="toc-technical-challenges" class="nav-link" data-scroll-target="#technical-challenges"><span class="header-section-number">1.4</span> Technical Challenges</a></li>
+  </ul></li>
   <li><a href="#related-work" id="toc-related-work" class="nav-link" data-scroll-target="#related-work"><span class="header-section-number">2</span> Related Work</a></li>
-  <li><a href="#objectives" id="toc-objectives" class="nav-link" data-scroll-target="#objectives"><span class="header-section-number">3</span> Objectives</a></li>
-  <li><a href="#datasets" id="toc-datasets" class="nav-link" data-scroll-target="#datasets"><span class="header-section-number">4</span> Datasets</a></li>
-  <li><a href="#methodology-and-proposed-solution" id="toc-methodology-and-proposed-solution" class="nav-link" data-scroll-target="#methodology-and-proposed-solution"><span class="header-section-number">5</span> Methodology and Proposed Solution</a></li>
-  <li><a href="#development-environment" id="toc-development-environment" class="nav-link" data-scroll-target="#development-environment"><span class="header-section-number">6</span> Development Environment</a></li>
-  <li><a href="#project-tasks-and-timeline" id="toc-project-tasks-and-timeline" class="nav-link" data-scroll-target="#project-tasks-and-timeline"><span class="header-section-number">7</span> Project Tasks and Timeline</a></li>
+  <li><a href="#data-and-fusion" id="toc-data-and-fusion" class="nav-link" data-scroll-target="#data-and-fusion"><span class="header-section-number">3</span> Data and Fusion</a>
+  <ul class="collapse">
+  <li><a href="#data-sources" id="toc-data-sources" class="nav-link" data-scroll-target="#data-sources"><span class="header-section-number">3.1</span> Data Sources</a></li>
+  <li><a href="#fusion-and-canonical-records" id="toc-fusion-and-canonical-records" class="nav-link" data-scroll-target="#fusion-and-canonical-records"><span class="header-section-number">3.2</span> Fusion and Canonical Records</a></li>
+  </ul></li>
+  <li><a href="#methods" id="toc-methods" class="nav-link" data-scroll-target="#methods"><span class="header-section-number">4</span> Methods</a>
+  <ul class="collapse">
+  <li><a href="#system-architecture" id="toc-system-architecture" class="nav-link" data-scroll-target="#system-architecture"><span class="header-section-number">4.1</span> System Architecture</a></li>
+  <li><a href="#ingestion-and-streaming" id="toc-ingestion-and-streaming" class="nav-link" data-scroll-target="#ingestion-and-streaming"><span class="header-section-number">4.2</span> Ingestion and Streaming</a></li>
+  <li><a href="#feature-engineering" id="toc-feature-engineering" class="nav-link" data-scroll-target="#feature-engineering"><span class="header-section-number">4.3</span> Feature Engineering</a></li>
+  <li><a href="#modeling" id="toc-modeling" class="nav-link" data-scroll-target="#modeling"><span class="header-section-number">4.4</span> Modeling</a></li>
+  <li><a href="#training-and-validation-strategy" id="toc-training-and-validation-strategy" class="nav-link" data-scroll-target="#training-and-validation-strategy"><span class="header-section-number">4.5</span> Training and Validation Strategy</a></li>
+  <li><a href="#live-prediction-evaluation" id="toc-live-prediction-evaluation" class="nav-link" data-scroll-target="#live-prediction-evaluation"><span class="header-section-number">4.6</span> Live-Prediction Evaluation</a></li>
+  <li><a href="#agent-prototype" id="toc-agent-prototype" class="nav-link" data-scroll-target="#agent-prototype"><span class="header-section-number">4.7</span> Agent Prototype</a></li>
+  </ul></li>
+  <li><a href="#evaluation-and-results" id="toc-evaluation-and-results" class="nav-link" data-scroll-target="#evaluation-and-results"><span class="header-section-number">5</span> Evaluation and Results</a>
+  <ul class="collapse">
+  <li><a href="#predictive-performance" id="toc-predictive-performance" class="nav-link" data-scroll-target="#predictive-performance"><span class="header-section-number">5.1</span> Predictive Performance</a></li>
+  <li><a href="#feature-importance" id="toc-feature-importance" class="nav-link" data-scroll-target="#feature-importance"><span class="header-section-number">5.2</span> Feature Importance</a></li>
+  <li><a href="#system-performance" id="toc-system-performance" class="nav-link" data-scroll-target="#system-performance"><span class="header-section-number">5.3</span> System Performance</a></li>
+  <li><a href="#expected-vs.-actual-performance-targets" id="toc-expected-vs.-actual-performance-targets" class="nav-link" data-scroll-target="#expected-vs.-actual-performance-targets"><span class="header-section-number">5.4</span> Expected vs.&nbsp;Actual Performance Targets</a></li>
+  </ul></li>
+  <li><a href="#discussion" id="toc-discussion" class="nav-link" data-scroll-target="#discussion"><span class="header-section-number">6</span> Discussion</a>
+  <ul class="collapse">
+  <li><a href="#key-concepts-and-definitions" id="toc-key-concepts-and-definitions" class="nav-link" data-scroll-target="#key-concepts-and-definitions"><span class="header-section-number">6.1</span> Key Concepts and Definitions</a></li>
+  <li><a href="#assumptions" id="toc-assumptions" class="nav-link" data-scroll-target="#assumptions"><span class="header-section-number">6.2</span> Assumptions</a></li>
+  <li><a href="#limitations" id="toc-limitations" class="nav-link" data-scroll-target="#limitations"><span class="header-section-number">6.3</span> Limitations</a></li>
+  <li><a href="#what-was-proposed-vs.-delivered" id="toc-what-was-proposed-vs.-delivered" class="nav-link" data-scroll-target="#what-was-proposed-vs.-delivered"><span class="header-section-number">6.4</span> What Was Proposed vs.&nbsp;Delivered</a></li>
+  </ul></li>
+  <li><a href="#technology-stack" id="toc-technology-stack" class="nav-link" data-scroll-target="#technology-stack"><span class="header-section-number">7</span> Technology Stack</a></li>
+  <li><a href="#conclusion-and-future-work" id="toc-conclusion-and-future-work" class="nav-link" data-scroll-target="#conclusion-and-future-work"><span class="header-section-number">8</span> Conclusion and Future Work</a></li>
   <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
-<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="aeroflux_stage2_proposal.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li><li><a href="aeroflux_stage2_proposal.docx"><i class="bi bi-file-word"></i>MS Word</a></li></ul></div></nav>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="aeroflux-final-paper.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li><li><a href="aeroflux-final-paper.docx"><i class="bi bi-file-word"></i>MS Word</a></li></ul></div></nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -203,7 +236,7 @@ div.csl-indent {
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
 <h1 class="title">AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence</h1>
-<p class="subtitle lead">Formal Project Proposal</p>
+<p class="subtitle lead">Final Project Report</p>
 </div>
 
 
@@ -221,7 +254,7 @@ div.csl-indent {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">July 18, 2026</p>
+      <p class="date">August 20, 2026</p>
     </div>
   </div>
   
@@ -245,44 +278,87 @@ div.csl-indent {
 </div>
 </div>
 </div>
+<!-- ============================================================= -->
+<!-- ABSTRACT                                                       -->
+<!-- ============================================================= -->
+<section id="abstract" class="level1 unnumbered">
+<h1 class="unnumbered">Abstract</h1>
+<!-- TODO: 150-250 word abstract. Write LAST, once results are final.
+Cover in order: (1) the problem — delays propagate through the NAS and existing
+tools are siloed; (2) what AeroFlux is — a portable, real-time fusion + ML
+platform with flight-delay prediction as the proof-of-concept; (3) what was
+built — SWIM/ADS-B/weather fusion, XGBoost scoring, cloud deployment, live
+evaluation; (4) the headline findings — discrimination transfers to live but
+calibration degrades under distribution shift (quantified), plus the system
+metrics (throughput, footprint, cost); (5) the contribution — propagation-aware
+modeling of cascading state in a tightly-coupled physical system. -->
+<p><em>TODO: abstract goes here (write last).</em></p>
+<!-- ============================================================= -->
+<!-- 1. INTRODUCTION                                                -->
+<!-- ============================================================= -->
+</section>
 <section id="introduction" class="level1" data-number="1">
 <h1 data-number="1"><span class="header-section-number">1</span> Introduction</h1>
 <p>Flight delays are among the most costly and disruptive failures in the U.S. National Airspace System (NAS), and they rarely occur in isolation. A single late arrival propagates downstream through the same aircraft’s rotation and through shared airport departure and arrival queues, so a local disturbance becomes a network-wide disruption.</p>
 <p>Although airlines, airports, and air traffic authorities increasingly use real-time and predictive decision-support systems, these capabilities are often specialized around particular organizations, operational domains, or stages of flight. For example, the FAA’s Traffic Flow Management System supports demand-and-capacity management across the National Airspace System, while Terminal Flight Data Manager integrates surface and national traffic-management data to improve airport operations <span class="citation" data-cites="faa_nextgen_2024 faa_tfdm_2020">(<a href="#ref-faa_tfdm_2020" role="doc-biblioref">Federal Aviation Administration, 2020</a>, <a href="#ref-faa_nextgen_2024" role="doc-biblioref">2024c</a>)</span>. Commercial platforms such as Sabre Mosaic support airline disruption recovery, and Assaia ApronAI uses computer vision and machine learning to monitor aircraft turnarounds and predict departure readiness <span class="citation" data-cites="sabre_disruption_management assaia_apronai">(<a href="#ref-assaia_apronai" role="doc-biblioref">Assaia International AG, n.d.</a>; <a href="#ref-sabre_disruption_management" role="doc-biblioref">Sabre Corporation, n.d.</a>)</span>. Opportunities therefore remain for integrated research platforms that fuse multiple live aviation data streams, model delay propagation across the broader flight network, and support forecasting, simulation, data science, and AI-assisted analysis.</p>
-<p><strong>Scope</strong>. The long-term vision for AeroFlux is ambitious and continues to evolve. Stage 2 therefore focuses on building a scalable, modular, configurable, portable, and decoupled big-data platform that can ingest, fuse, process, and analyze aviation and weather data in real time. This platform is intended to establish the technical foundation for future AeroFlux capabilities.</p>
-<p>Flight-delay prediction serves as the primary use case, but the architecture is designed to support additional applications, including congestion analysis, delay-propagation modeling, operational monitoring, decision support, and agentic AI. Stage 1 established a historical machine-learning pipeline and interactive prototype <span class="citation" data-cites="wilson2026flightdelay">(<a href="#ref-wilson2026flightdelay" role="doc-biblioref">Wilson et al., 2026</a>)</span>. Stage 2 extends that work by introducing a live data platform, comparing baseline and advanced predictive models, and developing an explainable analyst agent as an initial prototype.</p>
-<p><strong>Technical challenges.</strong> Building this platform requires solving several non-trivial problems:</p>
-<ol type="1">
-<li>Ingesting heterogeneous, error-prone streaming sources (FAA SWIM XML, ADS-B, weather) without data loss;</li>
-<li><em>Entity resolution</em> across systems that share no universal key—for example, the aircraft tail number is not published in SWIM flight data and must be recovered from ADS-B which itself has limitations due to lack of coverage;</li>
-<li>Unstable identifiers, since a flight’s <code>flight_ref</code> changes on plan amendment while its Globally Unique Flight Identifier (GUFI) remains stable;</li>
-<li>Train-serve skew, because historical labels (Bureau of Transportation Statistics) and live features are measured differently; and</li>
-<li>Delivering all of this at demo quality on a portable, low-cost footprint.</li>
-</ol>
-<p>Several of these challenges have already been partially addressed through a working end-to-end prototype pipeline. However, the proposed implementation is intended to reduce and manage these limitations rather than eliminate every possible source of missing data, ambiguity, or operational uncertainty.</p>
+<section id="problem-statement" class="level2" data-number="1.1">
+<h2 data-number="1.1" class="anchored" data-anchor-id="problem-statement"><span class="header-section-number">1.1</span> Problem Statement</h2>
+<!-- TODO: State the specific problem this project solves, in your own framing.
+The one to sharpen: it's NOT "predict flight delays" (well-trodden). It's
+"perceive cascading state in a tightly-coupled physical system in real time,
+anticipate propagation, and support action before the window closes — with
+flight delay as the proof-of-concept." Keep it 1-2 paragraphs. This is the
+paragraph that tells the reader why the project is more than a delay model. -->
+<p><em>TODO: problem statement.</em></p>
+</section>
+<section id="sec-contribution" class="level2" data-number="1.2">
+<h2 data-number="1.2" class="anchored" data-anchor-id="sec-contribution"><span class="header-section-number">1.2</span> Contribution</h2>
+<!-- TODO: THE most important section for novelty. Argue what AeroFlux
+contributes BEYOND flight-delay prediction. Anchor on:
+ - Propagation-aware modeling of cascading state (rotation as one nullable
+   channel over an always-available demand/weather/schedule backbone).
+ - The Swiss Cheese Model (Reason) framing — seeing the holes align in time to act.
+ - Generalization toward cyber-physical intelligence (sensors, robotics,
+   multi-domain propagation) — flight delay is the instance, not the point.
+ - The engineering contribution: train/serve parity by construction, a portable
+   local<->cloud platform, honest live evaluation of a streaming predictor.
+State clearly what is genuinely new vs. what is standard. -->
+<p><em>TODO: contribution — the “why should anyone care” argument.</em></p>
+</section>
+<section id="scope" class="level2" data-number="1.3">
+<h2 data-number="1.3" class="anchored" data-anchor-id="scope"><span class="header-section-number">1.3</span> Scope</h2>
+<p>The long-term vision for AeroFlux is ambitious and continues to evolve. This project focuses on building a scalable, modular, configurable, portable, and decoupled big-data platform that can ingest, fuse, process, and analyze aviation and weather data in real time, establishing the technical foundation for future AeroFlux capabilities. Flight-delay prediction serves as the primary use case, but the architecture is designed to support additional applications, including congestion analysis, delay-propagation modeling, operational monitoring, decision support, and agentic AI. Stage 1 established a historical machine-learning pipeline and interactive prototype <span class="citation" data-cites="wilson2026flightdelay">(<a href="#ref-wilson2026flightdelay" role="doc-biblioref">Wilson et al., 2026</a>)</span>; this work extends that with a live data platform, baseline-vs-advanced model comparison, cloud deployment, live-prediction evaluation, and an explainable analyst agent prototype.</p>
+</section>
+<section id="technical-challenges" class="level2" data-number="1.4">
+<h2 data-number="1.4" class="anchored" data-anchor-id="technical-challenges"><span class="header-section-number">1.4</span> Technical Challenges</h2>
+<p>Building this platform requires solving several non-trivial problems: (1) ingesting heterogeneous, error-prone streaming sources (FAA SWIM XML, ADS-B, weather) without data loss; (2) <em>entity resolution</em> across systems that share no universal key — for example, the aircraft tail number is not published in SWIM flight data and must be recovered from ADS-B, which itself has limited coverage; (3) unstable identifiers, since a flight’s <code>flight_ref</code> changes on plan amendment while its Globally Unique Flight Identifier (GUFI) remains stable; (4) train/serve skew, because historical labels (Bureau of Transportation Statistics) and live features are measured differently; and (5) delivering all of this at demo quality on a portable, low-cost footprint.</p>
+<!-- TODO: optionally add a sentence noting which of these were solved, partially
+solved, or remain open — forward-references the Limitations section. -->
+<!-- ============================================================= -->
+<!-- 2. RELATED WORK                                                -->
+<!-- ============================================================= -->
+</section>
 </section>
 <section id="related-work" class="level1" data-number="2">
 <h1 data-number="2"><span class="header-section-number">2</span> Related Work</h1>
+<!-- Retained from proposal — trim/update as needed for a final paper. -->
 <p><strong>Machine-learning delay prediction.</strong> Prior work frames delay prediction as supervised classification or regression over historical records. The review by <span class="citation" data-cites="sternberg2017review">Sternberg et al. (<a href="#ref-sternberg2017review" role="doc-biblioref">2017</a>)</span> describes the major approaches used for flight-delay prediction, while more recent work continues to evaluate machine-learning algorithms and class-imbalance handling <span class="citation" data-cites="albassam2025flight">(<a href="#ref-albassam2025flight" role="doc-biblioref">AlBassam &amp; AlShahrani, 2025</a>)</span>. These approaches can achieve strong predictive performance on curated historical datasets. However, when used in isolation, they may remain largely retrospective, rely on a limited set of data sources, and model flights as independent observations. These assumptions can restrict their ability to capture the temporal, spatial, and operational dependencies through which delays propagate across the aviation network.</p>
-<p><strong>Delay-propagation modeling.</strong> A separate literature models how delays ripple through airline schedules. <span class="citation" data-cites="beatty1999preliminary">Beatty et al. (<a href="#ref-beatty1999preliminary" role="doc-biblioref">1999</a>)</span> introduced an early method for evaluating delay propagation through an airline schedule, <span class="citation" data-cites="wong2012survival">Wong &amp; Tsai (<a href="#ref-wong2012survival" role="doc-biblioref">2012</a>)</span> applied a survival model, and <span class="citation" data-cites="kafle2016propagation">Kafle &amp; Zou (<a href="#ref-kafle2016propagation" role="doc-biblioref">2016</a>)</span> proposed an analytical-econometric approach. These methods capture important propagation mechanisms but are generally offline and disconnected from real-time streaming prediction. <span class="citation" data-cites="belcastro2016flight">Belcastro et al. (<a href="#ref-belcastro2016flight" role="doc-biblioref">2016</a>)</span> demonstrated scalable data mining for flight- delay prediction, establishing the value of big-data tooling while leaving room for tighter integration with real-time data fusion.</p>
-<p><strong>Operational data fusion.</strong> The state of the art in operational systems includes NASA’s Airspace Technology Demonstration 2 (ATD-2) <em>Fuser</em>, which fuses multiple aviation data sources into a unified flight record <span class="citation" data-cites="nasa2021atd2fuser">(<a href="#ref-nasa2021atd2fuser" role="doc-biblioref">National Aeronautics and Space Administration, 2021</a>)</span>. Its strength is production-grade fused operational data; its limitation for this project is that it is not designed as a lightweight, open, extensible ML/AI experimentation platform. This project actually leverages some of the high level concepts used in ATD-2 to create our own fuser.</p>
+<p><strong>Delay-propagation modeling.</strong> A separate literature models how delays ripple through airline schedules. <span class="citation" data-cites="beatty1999preliminary">Beatty et al. (<a href="#ref-beatty1999preliminary" role="doc-biblioref">1999</a>)</span> introduced an early method for evaluating delay propagation through an airline schedule, <span class="citation" data-cites="wong2012survival">Wong &amp; Tsai (<a href="#ref-wong2012survival" role="doc-biblioref">2012</a>)</span> applied a survival model, and <span class="citation" data-cites="kafle2016propagation">Kafle &amp; Zou (<a href="#ref-kafle2016propagation" role="doc-biblioref">2016</a>)</span> proposed an analytical-econometric approach. These methods capture important propagation mechanisms but are generally offline and disconnected from real-time streaming prediction. <span class="citation" data-cites="belcastro2016flight">Belcastro et al. (<a href="#ref-belcastro2016flight" role="doc-biblioref">2016</a>)</span> demonstrated scalable data mining for flight-delay prediction, establishing the value of big-data tooling while leaving room for tighter integration with real-time data fusion.</p>
+<p><strong>Operational data fusion.</strong> The state of the art in operational systems includes NASA’s Airspace Technology Demonstration 2 (ATD-2) <em>Fuser</em>, which fuses multiple aviation data sources into a unified flight record <span class="citation" data-cites="nasa2021atd2fuser">(<a href="#ref-nasa2021atd2fuser" role="doc-biblioref">National Aeronautics and Space Administration, 2021</a>)</span>. Its strength is production-grade fused operational data; its limitation for this project is that it is not designed as a lightweight, open, extensible ML/AI experimentation platform. This project leverages some of the high-level concepts used in ATD-2 to create its own fuser.</p>
 <p><strong>Emerging aviation intelligence systems.</strong> Recent operational systems show that the field is moving beyond static delay prediction toward real-time prediction, simulation, and decision support. FlightAware Foresight represents production ML-driven predictive flight tracking, including arrival-time, taxi-out, and runway predictions <span class="citation" data-cites="flightawareForesight">(<a href="#ref-flightawareForesight" role="doc-biblioref">FlightAware, {n.d.}</a>)</span>. NASA’s NAS Digital Twin and Project Bluebird extend this direction toward replayable and probabilistic simulation environments for live or historical airspace operations and AI-agent evaluation <span class="citation" data-cites="lauderdale2024nasDigitalTwin pepper2026probabilisticTwin">(<a href="#ref-lauderdale2024nasDigitalTwin" role="doc-biblioref">Lauderdale et al., 2024</a>; <a href="#ref-pepper2026probabilisticTwin" role="doc-biblioref">Pepper et al., 2026</a>)</span>. Commercial platforms such as Airspace Intelligence PRESCIENCE, Lufthansa Systems NetLine/Ops++ aiOCC, and Amadeus Flight Operations Control show the market moving toward 4D operating-domain twins, AI-assisted operations control, disruption recovery, and resource-aware decision support <span class="citation" data-cites="airspaceIntelligencePrescience lufthansa2025aiocc amadeusFlightOps">(<a href="#ref-airspaceIntelligencePrescience" role="doc-biblioref">Airspace Intelligence, {n.d.}</a>; <a href="#ref-amadeusFlightOps" role="doc-biblioref">Amadeus, {n.d.}</a>; <a href="#ref-lufthansa2025aiocc" role="doc-biblioref">Lufthansa Systems, 2025</a>)</span>. Recent prototypes such as FlightSense further combine rotation-chain features, real-time MLOps, and conversational/agentic interfaces for delay prediction <span class="citation" data-cites="shelke2026flightsense">(<a href="#ref-shelke2026flightsense" role="doc-biblioref">Shelke et al., 2026</a>)</span>, while the FAA AI safety roadmap highlights the need for assurance, incremental deployment, and aviation-specific safety methods when adding AI to operational contexts <span class="citation" data-cites="faa2024airoadmap">(<a href="#ref-faa2024airoadmap" role="doc-biblioref">Federal Aviation Administration, 2024a</a>)</span>. Together, these efforts motivate AeroFlux as a lightweight, SWIM-native experimentation platform that connects real-time data fusion, propagation-aware ML, replay, and explainable/agentic analysis rather than treating delay prediction as a standalone model.</p>
-<p><strong>Relevance of this approach.</strong> AeroFlux Stage 2 bridges these strands. It couples lightweight, Fuser-inspired real-time fusion and entity resolution with propagation-aware feature engineering and an explainable retrieval-augmented agent—integrating capabilities that prior work often treats separately.</p>
+<p><strong>Relevance of this approach.</strong> AeroFlux Stage 2 bridges these strands. It couples lightweight, Fuser-inspired real-time fusion and entity resolution with propagation-aware feature engineering and an explainable retrieval-augmented agent — integrating capabilities that prior work often treats separately.</p>
+<!-- ============================================================= -->
+<!-- 3. DATA                                                        -->
+<!-- ============================================================= -->
 </section>
-<section id="objectives" class="level1" data-number="3">
-<h1 data-number="3"><span class="header-section-number">3</span> Objectives</h1>
-<ol type="1">
-<li>Ingest and fuse FAA SWIM, ADS-B, and weather data into a validated, per-flight canonical state in real time.</li>
-<li>Deliver a portable, decoupled platform that runs unchanged on a laptop, school hardware, or any cloud VM (container-first, cloud-agnostic).</li>
-<li>Compare a baseline model against an advanced, propagation- and weather-aware model for arrival-delay prediction.</li>
-<li>Evaluate both <strong>predictive</strong> performance and <strong>system</strong> performance.</li>
-<li>Develop and evaluate a starter Aviation Operations Analyst that uses retrieval, model invocation, explainability, and structured tool calling to produce evidence-grounded disruption-investigation briefs without making operational decisions.</li>
-<li>Define stable tool interfaces that can later support knowledge graphs, operational-event replay, simulation, MCP integration, and specialized agent workflows without requiring replacement of the underlying data platform.</li>
-</ol>
-</section>
-<section id="datasets" class="level1" data-number="4">
-<h1 data-number="4"><span class="header-section-number">4</span> Datasets</h1>
-<p>The platform fuses live and historical aviation and weather sources, plus reference dimensions and a documentation corpus, summarized in <a href="#tbl-datasets" class="quarto-xref">Table&nbsp;1</a>. FAA SWIM provides the authoritative live NAS flight state <span class="citation" data-cites="faa_swim">(<a href="#ref-faa_swim" role="doc-biblioref">Federal Aviation Administration, 2024b</a>)</span>; ADS-B supplies the physical airframe identity (ICAO 24-bit address and registration) needed to link an aircraft’s successive legs, drawn from community feeds <span class="citation" data-cites="airplaneslive adsblol">(<a href="#ref-adsblol" role="doc-biblioref"><span class="nocase">adsb.lol</span>, 2026</a>; <a href="#ref-airplaneslive" role="doc-biblioref"><span class="nocase">airplanes.live</span>, 2026</a>)</span>, whose research value is demonstrated by large-scale networks such as OpenSky <span class="citation" data-cites="schaefer2014opensky">(<a href="#ref-schaefer2014opensky" role="doc-biblioref">Schäfer et al., 2014</a>)</span>; NOAA weather—a leading delay driver—is drawn from live METAR via the Aviation Weather Center <span class="citation" data-cites="awc_metar">(<a href="#ref-awc_metar" role="doc-biblioref">National Oceanic and Atmospheric Administration, 2026</a>)</span> for serving and the NCEI Integrated Surface Database for historical training <span class="citation" data-cites="ncei_isd">(<a href="#ref-ncei_isd" role="doc-biblioref">National Centers for Environmental Information, 2026</a>)</span>; and the BTS On-Time Performance dataset, which includes actual gate times and tail numbers, provides historical training labels <span class="citation" data-cites="bts_ontime">(<a href="#ref-bts_ontime" role="doc-biblioref">Bureau of Transportation Statistics, 2026</a>)</span>. Reference dimensions for airports and airlines <span class="citation" data-cites="ourairports openflights">(<a href="#ref-openflights" role="doc-biblioref">OpenFlights, 2026</a>; <a href="#ref-ourairports" role="doc-biblioref">OurAirports, 2026</a>)</span> support entity resolution, code normalization, and timezone alignment.</p>
+<section id="data-and-fusion" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Data and Fusion</h1>
+<section id="data-sources" class="level2" data-number="3.1">
+<h2 data-number="3.1" class="anchored" data-anchor-id="data-sources"><span class="header-section-number">3.1</span> Data Sources</h2>
+<!-- Retained from proposal. UPDATE the retained-size estimates to ACTUAL
+measured figures now that the system has run (e.g. the 0.51 MB S3 gold, the
+~163K distinct flights / 48h in DynamoDB, the real BTS parquet size). -->
+<p>The platform fuses live and historical aviation and weather sources, plus reference dimensions and a documentation corpus, summarized in <a href="#tbl-datasets" class="quarto-xref">Table&nbsp;1</a>. FAA SWIM provides the authoritative live NAS flight state <span class="citation" data-cites="faa_swim">(<a href="#ref-faa_swim" role="doc-biblioref">Federal Aviation Administration, 2024b</a>)</span>; ADS-B supplies the physical airframe identity (ICAO 24-bit address and registration) needed to link an aircraft’s successive legs, drawn from community feeds <span class="citation" data-cites="airplaneslive adsblol">(<a href="#ref-adsblol" role="doc-biblioref"><span class="nocase">adsb.lol</span>, 2026</a>; <a href="#ref-airplaneslive" role="doc-biblioref"><span class="nocase">airplanes.live</span>, 2026</a>)</span>, whose research value is demonstrated by large-scale networks such as OpenSky <span class="citation" data-cites="schaefer2014opensky">(<a href="#ref-schaefer2014opensky" role="doc-biblioref">Schäfer et al., 2014</a>)</span>; NOAA weather — a leading delay driver — is drawn from live METAR via the Aviation Weather Center <span class="citation" data-cites="awc_metar">(<a href="#ref-awc_metar" role="doc-biblioref">National Oceanic and Atmospheric Administration, 2026</a>)</span> for serving and the NCEI Integrated Surface Database for historical training <span class="citation" data-cites="ncei_isd">(<a href="#ref-ncei_isd" role="doc-biblioref">National Centers for Environmental Information, 2026</a>)</span>; and the BTS On-Time Performance dataset, which includes actual gate times and tail numbers, provides historical training labels <span class="citation" data-cites="bts_ontime">(<a href="#ref-bts_ontime" role="doc-biblioref">Bureau of Transportation Statistics, 2026</a>)</span>. Reference dimensions for airports and airlines <span class="citation" data-cites="ourairports openflights">(<a href="#ref-openflights" role="doc-biblioref">OpenFlights, 2026</a>; <a href="#ref-ourairports" role="doc-biblioref">OurAirports, 2026</a>)</span> support entity resolution, code normalization, and timezone alignment.</p>
 <div id="tbl-datasets" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-datasets-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
@@ -354,6 +430,9 @@ Table&nbsp;1: AeroFlux Stage 2 data sources, retention policies, and estimated s
 </div>
 </figure>
 </div>
+</section>
+<section id="fusion-and-canonical-records" class="level2" data-number="3.2">
+<h2 data-number="3.2" class="anchored" data-anchor-id="fusion-and-canonical-records"><span class="header-section-number">3.2</span> Fusion and Canonical Records</h2>
 <p>A raw SWIM message (abridged) is shown in <a href="#lst-swim" class="quarto-xref">Listing&nbsp;1</a>; the corresponding fused, validated canonical record produced by the ingestion pipeline is shown in <a href="#lst-record" class="quarto-xref">Listing&nbsp;2</a>. Each SWIM document explodes into one record per flight, which the pipeline fuses by GUFI across many messages over time.</p>
 <div id="lst-swim" class="xml listing quarto-float quarto-figure quarto-figure-left anchored">
 <figure class="quarto-float quarto-float-lst figure">
@@ -386,151 +465,345 @@ Listing&nbsp;2: Fused, schema-validated canonical flight-instance record.
 </div>
 </figure>
 </div>
+<!-- TODO: Describe the fusion mechanics in more depth than the proposal did,
+now that it's built:
+ - GUFI as the stable merge key; flight_ref instability handled.
+ - Bronze (Kafka/raw) -> silver (Postgres flight_instance, 48h, GUFI-keyed) ->
+   gold (Polars parquet feature/label tables).
+ - ADS-B airframe (tail/hex) resolution, why SWIM omits it, coverage reality (~38%).
+ - The single feature_prep contract that guarantees train/serve parity. -->
+<p><em>TODO: expanded fusion description and tier diagram/figure.</em></p>
+<!-- ============================================================= -->
+<!-- 4. METHODS                                                     -->
+<!-- ============================================================= -->
 </section>
-<section id="methodology-and-proposed-solution" class="level1" data-number="5">
-<h1 data-number="5"><span class="header-section-number">5</span> Methodology and Proposed Solution</h1>
-<p><strong>Architecture.</strong> AeroFlux Stage 2 is a streaming lakehouse: heterogeneous aviation and weather sources are ingested continuously, processed through a stream-processing core, and persisted across bronze → silver → gold tiers. Every component runs as a container, so the platform deploys unchanged on a laptop, university hardware, or a single cloud VM, with managed AWS services as an optional scale path rather than a requirement. The full architecture is shown in <a href="#fig-aeroflux2-arch" class="quarto-xref">Figure&nbsp;1</a>.</p>
-<div id="fig-aeroflux2-arch" class="lightbox quarto-float quarto-figure quarto-figure-center anchored">
+</section>
+<section id="methods" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> Methods</h1>
+<section id="system-architecture" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="system-architecture"><span class="header-section-number">4.1</span> System Architecture</h2>
+<!-- TODO: Insert the UPDATED architecture figure (the new draw.io diagram:
+offline BTS training, live pipeline, S3/DynamoDB, Lightsail serving, IAM/SSO
+boundaries, planned agent). Replace the old proposal figure path. -->
+<div id="fig-aeroflux-arch" class="lightbox quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-aeroflux2-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<a href="images/design/aeroflux2-arch-v2.svg" class="lightbox" data-gallery="quarto-lightbox-gallery-1" title="Figure&nbsp;1: AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud."><img src="images/design/aeroflux2-arch-v2.svg" class="img-fluid figure-img"></a>
+<div aria-describedby="fig-aeroflux-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<a href="images/design/aeroflux-arch-final.svg" class="lightbox" data-gallery="quarto-lightbox-gallery-1" title="Figure&nbsp;1: AeroFlux Stage 2 system architecture: real-time fusion, ML scoring, cloud storage, and serving, with offline training and security boundaries."><img src="images/design/aeroflux-arch-final.svg" class="img-fluid figure-img"></a>
 </div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-aeroflux2-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;1: AeroFlux Stage 2 system architecture: Real-Time Fusion, ML, and Analyst Architecture. Hybrid Solution: On-Prem and Cloud.
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-aeroflux-arch-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: AeroFlux Stage 2 system architecture: real-time fusion, ML scoring, cloud storage, and serving, with offline training and security boundaries.
 </figcaption>
 </figure>
 </div>
-<p><strong>Ingestion and streaming.</strong> Dedicated services publish each source—SWIM flight messages, ADS-B, and weather—to a dedicated Apache Kafka topic with 48-hour retention, decoupling producers from consumers and providing a replayable event history. A Kafka-consuming stream processor applies the <code>aeroflux_parser</code> library to validate each message against a strict schema contract and fuse messages into per-flight canonical records—keyed on the stable GUFI, with ADS-B used to resolve the aircraft tail that SWIM omits. The same feature and inference core runs on Polars for single-node deployment and executes within Apache Spark Structured Streaming’s <code>foreachBatch</code> for distributed scale-out, so the platform spans laptop to cluster without a rewrite.</p>
-<p><strong>Storage tiers and retention.</strong> Processing follows a bronze → silver → gold progression. Raw and fused per-flight state are held hot in PostgreSQL on a rolling 48-hour window; current per-flight predictions are served from a NoSQL store (Amazon DynamoDB in the cloud); and canonical and gold feature/label tables are written as partitioned Parquet to a MinIO / Amazon S3 data lake, queryable in place through Amazon Athena over an AWS Glue catalog. Short retention keeps the streaming footprint small and low-cost, while the lake retains durable history for training and replay. Because storage backends sit behind configuration, the local stack (PostgreSQL, MinIO) swaps to managed cloud services (RDS, S3) with no code change.</p>
-<p><strong>Machine learning.</strong> The pipeline establishes a logistic-regression <em>baseline</em> on flight-level features and an advanced gradient-boosted model (XGBoost) that improves on it by adding propagation, weather, and rolling airport-demand features <span class="citation" data-cites="chen2016xgboost beatty1999preliminary kafle2016propagation">(<a href="#ref-beatty1999preliminary" role="doc-biblioref">Beatty et al., 1999</a>; <a href="#ref-chen2016xgboost" role="doc-biblioref">Chen &amp; Guestrin, 2016</a>; <a href="#ref-kafle2016propagation" role="doc-biblioref">Kafle &amp; Zou, 2016</a>)</span>. Feature engineering is expressed once in a source-agnostic core, so historical (BTS) training and live serving compute identical features by construction; that core runs on Polars locally for development and within Spark at scale. For historical training, weather is drawn from a cached NOAA NCEI archive; live serving uses METAR observations mapped into the same feature schema, preserving train/serve parity at the feature level. Both models target a 15-minute arrival-delay classification, are tracked in a run registry (with optional MLflow integration), and are explained with SHAP <span class="citation" data-cites="lundberg2017shap">(<a href="#ref-lundberg2017shap" role="doc-biblioref">Lundberg &amp; Lee, 2017</a>)</span>.</p>
-<p><strong>AI orchestration prototype.</strong> A lightweight <em>Aviation Operations Analyst</em> uses retrieval-augmented generation <span class="citation" data-cites="lewis2020rag">(<a href="#ref-lewis2020rag" role="doc-biblioref">Lewis et al., 2020</a>)</span> and a constrained LangGraph workflow over a curated aviation-document corpus to produce cited, evidence- grounded briefs; it does not touch live streaming data or make operational decisions, and is evaluated on a small set of reviewed questions for groundedness, citation accuracy, and appropriate tool use. As an optional stretch goal, a read-only Model Context Protocol (MCP) server may expose these tools through a standardized interface.</p>
-<p><strong>Evaluation.</strong> We evaluate at two levels, each against an explicit baseline.</p>
-<p><em>Predictive (model) baseline.</em> The logistic-regression classifier is the baseline; the advanced XGBoost model is the improvement. Both target a 15-minute arrival-delay classification and are compared on ROC-AUC, PR-AUC, F1, and Brier score with calibration, using point-in-time features to prevent leakage. We also report train/serve behavior honestly: because rotation and recent-delay features are dense in historical training but sparse in live serving—airframe resolution depends on ADS-B coverage—live predictions exhibit a distribution shift we quantify and discuss, with probability calibration identified as future work.</p>
-<p><em>System baseline.</em> The system is evaluated on sustained throughput (messages per second), ingestion-to-gold latency, airframe-resolution coverage (the share of live flights linked to an ADS-B airframe), fusion completeness (per-flight field fill rates), and resource footprint. Baseline measurements are taken at initial deployment and compared against achieved performance after optimization, demonstrating that the pipeline moves data correctly and at scale through every tier.</p>
+<!-- TODO: 2-3 paragraphs. The local↔cloud split (streaming/ML local; durable
+data to S3/DynamoDB; always-on Streamlit on Lightsail reads cloud only). The
+bronze→silver→gold tiers. Container-first / config-toggle portability. Note what
+was actually built vs. the proposal (e.g. Polars used in place of Spark for this
+scale; MinIO/Athena path documented but S3/DynamoDB used). -->
+<p><em>TODO: architecture prose.</em></p>
 </section>
-<section id="development-environment" class="level1" data-number="6">
-<h1 data-number="6"><span class="header-section-number">6</span> Development Environment</h1>
-<p>The stack (<a href="#tbl-stack" class="quarto-xref">Table&nbsp;2</a>) is entirely open-source and container-first. Every component runs as a Docker Compose service, so the platform deploys unchanged on a laptop, university hardware, or a single cloud VM; managed AWS services (MSK, EMR, SageMaker) are an optional scale path rather than a requirement. MinIO provides an S3-compatible object store that swaps to real S3 with no code change. Short retention keeps storage and cost minimal (target budget: a modest VM plus a few dollars of LLM API usage).</p>
+<section id="ingestion-and-streaming" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="ingestion-and-streaming"><span class="header-section-number">4.2</span> Ingestion and Streaming</h2>
+<!-- TODO: SWIM/ADS-B/weather producers -> Kafka topics (48h retention) ->
+consumer fuses to Postgres silver. The self-healing ingest (auto-reconnect,
+real-liveness health check). Feature/inference core on Polars (note Spark
+Structured Streaming foreachBatch as the documented scale path). -->
+<p><em>TODO: ingestion + streaming.</em></p>
+</section>
+<section id="feature-engineering" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="feature-engineering"><span class="header-section-number">4.3</span> Feature Engineering</h2>
+<!-- TODO: The single source-agnostic feature_prep contract (train/serve parity
+by construction). The 18-feature default set: 5 structural + 5
+rotation/propagation + 4 demand/recent-delay + 4 weather (wind/IFR). The fill
+policy (fill-0 / leave-null / drop-structural) and WHY (XGBoost routes NaN).
+propagation_pressure_min = max(0, prev_leg_arr_delay - turnaround_buffer).
+Weather scored at scheduled departure to prevent leakage. temp/ceiling/vis as
+the opt-in parity-gap fields. -->
+<p><em>TODO: feature engineering + the parity argument.</em></p>
+</section>
+<section id="modeling" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="modeling"><span class="header-section-number">4.4</span> Modeling</h2>
+<!-- TODO: Baseline logistic regression vs. advanced XGBoost (+ SparkML GBT as
+the distributed path). Target: 15-min arrival-delay classification. Continuous
+retraining as new BTS data arrives. Model registry. SHAP explainability. -->
+<p><em>TODO: models.</em></p>
+</section>
+<section id="training-and-validation-strategy" class="level2" data-number="4.5">
+<h2 data-number="4.5" class="anchored" data-anchor-id="training-and-validation-strategy"><span class="header-section-number">4.5</span> Training and Validation Strategy</h2>
+<!-- TODO: THE ML-rubric-heavy section. Cover explicitly:
+ - Feature selection (how the 18 features were chosen; importances).
+ - Train/test split — time-aware split, why (no random split on temporal data).
+ - Cross-validation approach (time-aware CV).
+ - Hyperparameter tuning (grid + time-CV).
+ - TEMPORAL LEAKAGE PREVENTION — point-in-time features, weather scored at
+   scheduled departure, no future information, scored_at precedes outcome.
+ - Class imbalance handling if any. -->
+<p><em>TODO: train/test strategy, tuning, leakage prevention.</em></p>
+</section>
+<section id="live-prediction-evaluation" class="level2" data-number="4.6">
+<h2 data-number="4.6" class="anchored" data-anchor-id="live-prediction-evaluation"><span class="header-section-number">4.6</span> Live-Prediction Evaluation</h2>
+<!-- TODO: The novel bit — evaluating a STREAMING predictor. Explain:
+ - Predictions made at scheduled-departure; ground truth arrives hours later at
+   landing. Required adding a prediction LOG (serving path is current-state by
+   design) to reconcile earlier predictions against later realized outcomes.
+ - Lag-bucketed reconciliation (24h+ / 6-24h / 2-6h / 0.5-2h / <30min) — reveals
+   accuracy as a function of prediction horizon; avoids hindsight leakage.
+ - Ground truth = own pipeline's arr_delay_min backfilled into later gold
+   snapshots (free, automatic); FlightAware only as optional external corroboration. -->
+<p><em>TODO: live-eval methodology.</em></p>
+</section>
+<section id="agent-prototype" class="level2" data-number="4.7">
+<h2 data-number="4.7" class="anchored" data-anchor-id="agent-prototype"><span class="header-section-number">4.7</span> Agent Prototype</h2>
+<!-- TODO (Ryan / pending): RAG over aviation-doc corpus, LangGraph constrained
+workflow, read-only tool calling, LLM via API (Bedrock/Anthropic). Runs as a
+separate service reading S3/DynamoDB via read-only SSO; app calls it via
+AEROFLUX_AGENT_URL -> {question,history} -> {answer,citations}. Evidence-grounded
+briefs, no operational decisions. Mark clearly as prototype / in-progress. -->
+<p><em>TODO: agent prototype (coordinate with Ryan).</em></p>
+<!-- ============================================================= -->
+<!-- 5. EVALUATION AND RESULTS                                      -->
+<!-- ============================================================= -->
+</section>
+</section>
+<section id="evaluation-and-results" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> Evaluation and Results</h1>
+<p>We evaluate at two levels, each against an explicit baseline: predictive (model) performance and system performance.</p>
+<section id="predictive-performance" class="level2" data-number="5.1">
+<h2 data-number="5.1" class="anchored" data-anchor-id="predictive-performance"><span class="header-section-number">5.1</span> Predictive Performance</h2>
+<!-- TODO: BTS held-out metrics vs. LIVE reconciled metrics, same metric family:
+ROC-AUC, PR-AUC, F1, Brier, confusion matrix, calibration curve. Present the
+comparison table. LEAD WITH DISCRIMINATION (AUC). Be honest and precise:
+ - BTS training AUC ~0.88 (clean, dense features).
+ - Live AUC — report the MATURE number once the eval sample resolves (NOT the
+   ~0.59 censoring-artifact figure; that number reflects an immature,
+   right-censored sample that under-represents delayed flights). Wait for the
+   backlog to resolve before finalizing.
+ - Per-lag-bucket accuracy: expect it to sharpen as the horizon shortens.
+ - Calibration curve showing over-prediction, attributed to distribution shift. -->
+<p><em>TODO: predictive results — BTS vs.&nbsp;live comparison table + calibration curve.</em></p>
+<!-- Placeholder comparison table — replace with final numbers. -->
+<div id="tbl-predictive" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-predictive-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: Predictive performance, historical training vs.&nbsp;live reconciled evaluation.
+</figcaption>
+<div aria-describedby="tbl-predictive-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Metric</th>
+<th>BTS training (held-out)</th>
+<th>Live (reconciled)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>ROC-AUC</td>
+<td><em>TODO</em></td>
+<td><em>TODO</em></td>
+</tr>
+<tr class="even">
+<td>PR-AUC</td>
+<td><em>TODO</em></td>
+<td><em>TODO</em></td>
+</tr>
+<tr class="odd">
+<td>F1</td>
+<td><em>TODO</em></td>
+<td><em>TODO</em></td>
+</tr>
+<tr class="even">
+<td>Brier</td>
+<td><em>TODO</em></td>
+<td><em>TODO</em></td>
+</tr>
+<tr class="odd">
+<td>n</td>
+<td><em>TODO</em></td>
+<td><em>TODO</em></td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+</section>
+<section id="feature-importance" class="level2" data-number="5.2">
+<h2 data-number="5.2" class="anchored" data-anchor-id="feature-importance"><span class="header-section-number">5.2</span> Feature Importance</h2>
+<!-- TODO: XGBoost feature importances (the 18 features ranked). Tie the top
+features back to the propagation/demand/weather story. Screenshot from the Model
+Performance page works here. -->
+<p><em>TODO: feature importance figure + discussion.</em></p>
+</section>
+<section id="system-performance" class="level2" data-number="5.3">
+<h2 data-number="5.3" class="anchored" data-anchor-id="system-performance"><span class="header-section-number">5.3</span> System Performance</h2>
+<!-- TODO: The system baseline-vs-achieved story. Report:
+ - Sustained throughput (messages/sec).
+ - Ingestion-to-gold latency.
+ - Airframe-resolution (hex) coverage (~37%).
+ - Fusion completeness (per-flight field fill rates).
+ - Resource footprint — the headline efficiency numbers (S3 gold ~0.51 MB,
+   DynamoDB size, Lightsail memory ~270 MB / 3.7 GB, cost).
+ - The DynamoDB write optimization: ~18x / 94.6% write reduction via
+   change-detection; writes were the cost driver, GSI deliberately not built.
+ - Baseline at initial deploy vs. achieved after optimization. -->
+<p><em>TODO: system performance table (baseline vs.&nbsp;achieved).</em></p>
+</section>
+<section id="expected-vs.-actual-performance-targets" class="level2" data-number="5.4">
+<h2 data-number="5.4" class="anchored" data-anchor-id="expected-vs.-actual-performance-targets"><span class="header-section-number">5.4</span> Expected vs.&nbsp;Actual Performance Targets</h2>
+<!-- TODO: State the targets you SET and the values you ACHIEVED, side by side:
+live vs. historical prediction performance, prediction throughput target vs.
+actual, ingestion latency target vs. actual. Honest gaps are fine and expected. -->
+<p><em>TODO: targets vs.&nbsp;achieved table.</em></p>
+<!-- ============================================================= -->
+<!-- 6. DISCUSSION: CONCEPTS, ASSUMPTIONS, LIMITATIONS              -->
+<!-- ============================================================= -->
+</section>
+</section>
+<section id="discussion" class="level1" data-number="6">
+<h1 data-number="6"><span class="header-section-number">6</span> Discussion</h1>
+<section id="key-concepts-and-definitions" class="level2" data-number="6.1">
+<h2 data-number="6.1" class="anchored" data-anchor-id="key-concepts-and-definitions"><span class="header-section-number">6.1</span> Key Concepts and Definitions</h2>
+<!-- TODO: Define, for the reader:
+ - Delay: arrival delay >= 15 min (matches BTS label_delayed).
+ - Propagation / propagation pressure: how a late inbound leg pressures the
+   outbound; propagation_pressure_min definition.
+ - "Unusual event": what it means in this system.
+ - Rotation as one nullable channel over the always-available backbone.
+ - Origin recent departure delay and other engineered terms an analyst would
+   want defined. -->
+<p><em>TODO: concepts + glossary.</em></p>
+</section>
+<section id="assumptions" class="level2" data-number="6.2">
+<h2 data-number="6.2" class="anchored" data-anchor-id="assumptions"><span class="header-section-number">6.2</span> Assumptions</h2>
+<!-- TODO: The modeling and system assumptions (e.g. GUFI stability, 48h window
+sufficiency, METAR as live-weather proxy, touchdown as arrival proxy, etc.). -->
+<p><em>TODO: assumptions.</em></p>
+</section>
+<section id="limitations" class="level2" data-number="6.3">
+<h2 data-number="6.3" class="anchored" data-anchor-id="limitations"><span class="header-section-number">6.3</span> Limitations</h2>
+<!-- TODO: The honest limitations — a STRENGTH when documented well:
+ - Distribution shift: rotation/recent-delay dense in BTS, sparse live; live
+   predictions over-predict; calibration is future work. QUANTIFY it.
+ - Right-censoring in live evaluation: delayed flights land later, so a young
+   sample under-represents them; metrics mature over time. This is why early
+   live AUC looked depressed.
+ - ADS-B hex coverage ceiling (~37%) — not fixable in code.
+ - Touchdown-vs-gate-arrival parity gap: live arrival = ADS-B touchdown, BTS =
+   gate ARR_TIME; a ~5-15 min systematic difference, unfixable without gate data.
+ - Live batch-weather sparsity; single-year station bridge.
+ - What weird things a reader might see in live inference and why. -->
+<p><em>TODO: limitations (distribution shift, censoring, coverage, parity gaps).</em></p>
+</section>
+<section id="what-was-proposed-vs.-delivered" class="level2" data-number="6.4">
+<h2 data-number="6.4" class="anchored" data-anchor-id="what-was-proposed-vs.-delivered"><span class="header-section-number">6.4</span> What Was Proposed vs.&nbsp;Delivered</h2>
+<!-- TODO: Honest scope reconciliation — proposal objectives vs. what shipped.
+ - Delivered: real-time fusion, portable platform, baseline+XGBoost, dual
+   evaluation, cloud deployment, live eval, analyst-page transparency.
+ - Partial/changed: Polars instead of Spark cluster (justified for this scale,
+   Spark GBT as documented path); agent prototype (in progress with Ryan);
+   MinIO/Athena documented, S3/DynamoDB used.
+ - Not delivered / future: Spark batch analytics job, full simulation/replay,
+   knowledge graph, MCP server, multi-agent. -->
+<p><em>TODO: proposed vs.&nbsp;delivered table.</em></p>
+<!-- ============================================================= -->
+<!-- 7. TECHNOLOGY STACK                                            -->
+<!-- ============================================================= -->
+</section>
+</section>
+<section id="technology-stack" class="level1" data-number="7">
+<h1 data-number="7"><span class="header-section-number">7</span> Technology Stack</h1>
+<!-- TODO: Update the proposal's stack table to reflect what was ACTUALLY used
+(as opposed to proposed). Add a "How it was used" column per your request.
+Note Polars (used) vs Spark (documented scale path), S3/DynamoDB (used) vs
+MinIO/Athena (documented), Caddy/GHCR/GitHub Actions (deployment), etc. -->
 <div id="tbl-stack" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-tbl figure">
 <figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-stack-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;2: Development environment and technology stack.
+Table&nbsp;3: Technology stack and how each component was used.
 </figcaption>
 <div aria-describedby="tbl-stack-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="caption-top table">
 <colgroup>
-<col style="width: 50%">
-<col style="width: 50%">
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Category</th>
-<th>Tools</th>
+<th>Tool</th>
+<th>How it was used</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td>Language</td>
 <td>Python 3.11</td>
+<td><em>TODO</em></td>
 </tr>
 <tr class="even">
 <td>Streaming</td>
-<td>Apache Kafka, Spark Structured Streaming</td>
+<td>Apache Kafka</td>
+<td><em>TODO</em></td>
 </tr>
 <tr class="odd">
-<td>Storage</td>
-<td>MongoDB, PostgreSQL + pgvector, MinIO / Amazon S3</td>
+<td>Processing</td>
+<td>Polars (Spark Structured Streaming as scale path)</td>
+<td><em>TODO</em></td>
 </tr>
 <tr class="even">
-<td>Historical replay</td>
-<td>Kafka offsets and immutable Parquet event history in MinIO / S3</td>
+<td>Storage (local)</td>
+<td>PostgreSQL</td>
+<td><em>TODO</em></td>
 </tr>
 <tr class="odd">
+<td>Storage (cloud)</td>
+<td>Amazon S3, DynamoDB</td>
+<td><em>TODO</em></td>
+</tr>
+<tr class="even">
 <td>ML</td>
-<td>scikit-learn, XGBoost, Spark ML, MLflow, SHAP</td>
-</tr>
-<tr class="even">
-<td>AI orchestration</td>
-<td>LangGraph constrained workflow with read-only tool calling</td>
-</tr>
-<tr class="odd">
-<td>LLM / RAG</td>
-<td>Claude API or Amazon Bedrock; pgvector semantic retrieval</td>
-</tr>
-<tr class="even">
-<td>Agent tools</td>
-<td>Document search, operational-data query, model inference, SHAP explanation, event reconstruction</td>
+<td>scikit-learn, XGBoost, SparkML GBT, SHAP</td>
+<td><em>TODO</em></td>
 </tr>
 <tr class="odd">
 <td>Serving / UI</td>
-<td>FastAPI, Dash / Plotly</td>
+<td>Streamlit, Plotly</td>
+<td><em>TODO</em></td>
 </tr>
 <tr class="even">
-<td>Orchestration</td>
-<td>Prefect, Airflow or other</td>
+<td>Deployment</td>
+<td>Docker, Caddy, GHCR, GitHub Actions, AWS Lightsail</td>
+<td><em>TODO</em></td>
 </tr>
 <tr class="odd">
-<td>Interoperability</td>
-<td>Optional read-only AeroFlux MCP server</td>
+<td>Security</td>
+<td>AWS IAM, Identity Center (SSO)</td>
+<td><em>TODO</em></td>
 </tr>
 <tr class="even">
-<td>Packaging / Platform</td>
-<td>Docker Compose; optional AWS EC2, S3, and EMR Serverless</td>
+<td>AI orchestration</td>
+<td>LangGraph, RAG, LLM API (Bedrock/Anthropic)</td>
+<td><em>TODO (Ryan)</em></td>
 </tr>
 </tbody>
 </table>
 </div>
 </figure>
 </div>
+<!-- ============================================================= -->
+<!-- 8. CONCLUSION                                                  -->
+<!-- ============================================================= -->
 </section>
-<section id="project-tasks-and-timeline" class="level1" data-number="7">
-<h1 data-number="7"><span class="header-section-number">7</span> Project Tasks and Timeline</h1>
-<p>The minimum implementation is scoped to approximately one month (<a href="#tbl-timeline" class="quarto-xref">Table&nbsp;3</a>), building on Stage 1’s completed ingestion, fusion, entity-resolution, schema contract, and baseline model. Future capabilities—graph analytics, simulation, digital twin, and a multi-agent system—are explicitly out of scope for this timeline.</p>
-<div id="tbl-timeline" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-timeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;3: One-month project timeline and effort allocation.
-</figcaption>
-<div aria-describedby="tbl-timeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 33%">
-<col style="width: 33%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Week</th>
-<th>Tasks</th>
-<th>Est. hours</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>1</td>
-<td>Complete streaming and weather integration; prepare MongoDB records, documentation corpus, and two or three historical investigation scenarios</td>
-<td>20</td>
-</tr>
-<tr class="even">
-<td>2</td>
-<td>Feature engineering; baseline and advanced model evaluation; MLflow tracking; SHAP explanation service</td>
-<td>22</td>
-</tr>
-<tr class="odd">
-<td>3</td>
-<td>Build pgvector retrieval pipeline and LangGraph analyst workflow; implement document-search, flight-query, prediction, explanation, and event-reconstruction tools</td>
-<td>22</td>
-</tr>
-<tr class="even">
-<td>4</td>
-<td>Integrate the analyst UI; create agent evaluation cases; measure groundedness, tool selection, latency, and predictive/system performance; complete demonstration and write-up</td>
-<td>18</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
+<section id="conclusion-and-future-work" class="level1" data-number="8">
+<h1 data-number="8"><span class="header-section-number">8</span> Conclusion and Future Work</h1>
+<!-- TODO: Summarize what was built and the headline findings. Restate the
+contribution (propagation-aware real-time state modeling; flight delay as
+proof-of-concept for cyber-physical intelligence). Future work: probability
+calibration (Platt/isotonic), missingness-aware training, cascade simulation
+across the NAS, GSI at scale, the agent, knowledge-graph/replay/MCP. -->
+<p><em>TODO: conclusion + future work.</em></p>
 </section>
 <section id="references" class="level1 unnumbered">
 <h1 class="unnumbered">References</h1>
@@ -562,9 +835,6 @@ Belcastro, L., Marozzo, F., Talia, D., &amp; Trunfio, P. (2016). Using scalable 
 <div id="ref-bts_ontime" class="csl-entry" role="listitem">
 Bureau of Transportation Statistics. (2026). <em>Reporting carrier on-time performance</em>. <a href="https://www.transtats.bts.gov/Tables.asp?DB_ID=120" class="uri">https://www.transtats.bts.gov/Tables.asp?DB_ID=120</a>.
 </div>
-<div id="ref-chen2016xgboost" class="csl-entry" role="listitem">
-Chen, T., &amp; Guestrin, C. (2016). <span>XGBoost</span>: A scalable tree boosting system. <em>Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining</em>, 785–794.
-</div>
 <div id="ref-faa_tfdm_2020" class="csl-entry" role="listitem">
 Federal Aviation Administration. (2020). <em><span>TFDM</span> capabilities</em>. U.S. Department of Transportation. <a href="https://www.faa.gov/air_traffic/technology/tfdm/capabilities">https://www.faa.gov/air_traffic/technology/tfdm/capabilities</a>
 </div>
@@ -586,14 +856,8 @@ Kafle, N., &amp; Zou, B. (2016). Modeling flight delay propagation: A new analyt
 <div id="ref-lauderdale2024nasDigitalTwin" class="csl-entry" role="listitem">
 Lauderdale, T. A., Windhorst, R. D., Coppenbarger, R. A., Thipphavong, D. P., &amp; Erzberger, H. (2024). Overview of the national airspace system <span>(NAS)</span> digital twin simulation environment. <em>AIAA AVIATION Forum and ASCEND 2024</em>. <a href="https://doi.org/10.2514/6.2024-4011">https://doi.org/10.2514/6.2024-4011</a>
 </div>
-<div id="ref-lewis2020rag" class="csl-entry" role="listitem">
-Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., Küttler, H., Lewis, M., Yih, W., Rocktäschel, T., Riedel, S., &amp; Kiela, D. (2020). Retrieval-augmented generation for knowledge-intensive <span>NLP</span> tasks. <em>Advances in Neural Information Processing Systems 33</em>, 9459–9474.
-</div>
 <div id="ref-lufthansa2025aiocc" class="csl-entry" role="listitem">
 Lufthansa Systems. (2025). <em><span class="nocase">NetLine/Ops++ aiOCC</span></em>. <a href="https://cdn.lhsystems.com/2025-02/2025_02_Product_information_NetLine_Ops_%2B%2B_aiOCC.pdf">https://cdn.lhsystems.com/2025-02/2025_02_Product_information_NetLine_Ops_%2B%2B_aiOCC.pdf</a>
-</div>
-<div id="ref-lundberg2017shap" class="csl-entry" role="listitem">
-Lundberg, S. M., &amp; Lee, S.-I. (2017). A unified approach to interpreting model predictions. <em>Advances in Neural Information Processing Systems 30</em>, 4765–4774.
 </div>
 <div id="ref-nasa2021atd2fuser" class="csl-entry" role="listitem">
 National Aeronautics and Space Administration. (2021). <em>Airspace technology demonstration 2 (<span>ATD-2</span>) fuser</em>. Computer software; GitHub. <a href="https://github.com/nasa/atd2-fuser">https://github.com/nasa/atd2-fuser</a>
