@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/notes-todos.html</loc>
-    <lastmod>2026-08-02T11:19:23.184Z</lastmod>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/presentation/project_setups.html</loc>
+    <lastmod>2026-08-11T23:21:49.581Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/presentation/final_requirements.html</loc>
+    <lastmod>2026-08-12T12:56:37.784Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/next.html</loc>
+    <lastmod>2026-08-09T13:20:28.983Z</lastmod>
   </url>
   <url>
     <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/integration.html</loc>
@@ -17,16 +25,24 @@
     <lastmod>2026-08-05T01:48:45.570Z</lastmod>
   </url>
   <url>
-    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/aeroflux_stage2_proposal.html</loc>
-    <lastmod>2026-08-05T23:07:59.685Z</lastmod>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/index.html</loc>
+    <lastmod>2026-07-25T14:00:16.684Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/aeroflux-final-paper.html</loc>
+    <lastmod>2026-08-12T15:21:45.507Z</lastmod>
   </url>
   <url>
     <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/about.html</loc>
     <lastmod>2026-08-02T11:50:29.347Z</lastmod>
   </url>
   <url>
-    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/index.html</loc>
-    <lastmod>2026-07-25T14:00:16.684Z</lastmod>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/aeroflux_stage2_proposal.html</loc>
+    <lastmod>2026-08-05T23:07:59.685Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/benchmarking.html</loc>
+    <lastmod>2026-08-06T01:37:59.473Z</lastmod>
   </url>
   <url>
     <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/cloud.html</loc>
@@ -39,5 +55,13 @@
   <url>
     <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/ml_pipeline.html</loc>
     <lastmod>2026-08-05T01:44:10.831Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/notes-todos.html</loc>
+    <lastmod>2026-08-02T11:19:23.184Z</lastmod>
+  </url>
+  <url>
+    <loc>https://jonathanwilsonami.github.io/aero-flux-stage2-dev/notes/presentation/major_performance_increases.html</loc>
+    <lastmod>2026-08-12T10:29:22.683Z</lastmod>
   </url>
 </urlset>
