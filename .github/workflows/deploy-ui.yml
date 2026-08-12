@@ -30,6 +30,25 @@ jobs:
       - id: meta
         run: echo "sha_tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
+      - name: Deploy-gate diagnostics (no secret values printed, just presence)
+        # Runs unconditionally (unlike `deploy`, which just shows "skipped"
+        # with zero log output when its `if:` is false) so the actual gate
+        # state is always visible in the Actions log without needing repo
+        # Settings access. vars.DEPLOY_ENABLED is a non-secret repo
+        # variable by design — safe to print outright; the SSH secrets are
+        # only checked for presence (!= ''), never printed.
+        run: |
+          echo "DEPLOY_ENABLED (repo variable) = '${{ vars.DEPLOY_ENABLED }}'"
+          if [ "${{ vars.DEPLOY_ENABLED }}" = "true" ]; then
+            echo "-> deploy job WILL run."
+          else
+            echo "-> deploy job will be SKIPPED. Fix: Settings -> Secrets and"
+            echo "   variables -> Actions -> Variables tab (not Secrets) on"
+            echo "   THIS repo -> set DEPLOY_ENABLED to exactly 'true'."
+          fi
+          echo "LIGHTSAIL_SSH_HOST secret present: ${{ secrets.LIGHTSAIL_SSH_HOST != '' }}"
+          echo "LIGHTSAIL_SSH_KEY secret present:  ${{ secrets.LIGHTSAIL_SSH_KEY != '' }}"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -74,8 +93,8 @@ jobs:
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           envs: IMAGE_TAG
           script: |
-            cd /opt/aeroflux
+            cd /home/ubuntu/aeroflux-app
             IMAGE_TAG=latest docker compose -f docker-compose.lightsail.yml pull
-            IMAGE_TAG=latest docker compose -f docker-compose.lightsail.yml up -d
+            IMAGE_TAG=latest docker compose -f docker-compose.lightsail.yml up -d --force-recreate app
         env:
           IMAGE_TAG: latest
