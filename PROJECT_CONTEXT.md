@@ -258,34 +258,45 @@ Caddyfile), `.github/workflows/deploy-ui.yml`, `tests/` (83 pass).
 
 **Done** (was the roadmap; now history): `git main` synced; cloud storage
 abstraction (`io.py` StateRepository/LakeStore, Postgres/DynamoDB +
-Local/S3); `sync_cloud.py`; `data_access.py` reading through the same
-factories; Lightsail deployment (Docker + Caddy + GHCR CI, `deploy.sh`,
-duplicate-stack guard). See `DEPLOYMENT.md` for the deploy flow and every
-gotcha hit getting there.
+Local/S3); `sync_cloud.py` (+ write-volume dedup, `SYNC_DEDUPE`); write-
+ahead cost cut ~18x on DynamoDB (content-hash change detection — a GSI
+was evaluated and deliberately not built, see Gotchas); `data_access.py`
+reading through the same factories; ingest self-healing (SWIM
+auto-reconnect + a real liveness health check, not just PID); live-
+prediction evaluation (`evaluate_live.py`, multi-lag-bucket reconciliation)
++ the Model Performance analyst page, both local and cloud-aware (eval
+outputs now sync to S3 too); Lightsail deployment (Docker + Caddy + GHCR
+CI, `deploy.sh`, duplicate-stack guard) **with fully automated, hands-off
+CI deploy now verified working** (fixed a `DEPLOY_ENABLED` secret-vs-
+variable mixup, a wrong remote path, and a corrupted SSH key secret — see
+`DEPLOYMENT.md` §6); `AGENT_INTEGRATION.md` written (wire contract,
+production S3/DynamoDB read path, credentials, boundary — flags that the
+UI doesn't render `citations` yet, only `answer`). See `DEPLOYMENT.md` for
+the deploy flow and every gotcha hit getting there.
 
 **Open:**
-1. **Evaluation work** (current focus) — see `notes/next.qmd`.
+1. **Evaluation work** (current focus) — the live-eval sample is still
+   young (right-censored, see Known Limitations); keep it running and
+   revisit the per-lag-bucket numbers as the pending backlog resolves.
 2. **Spark batch analytics job** — the original AWS-storage plan's item 4
    (containerized PySpark reading gold from the LakeStore, delay-rate/mean-
    risk aggregations by route/carrier/hour, written back as an `analytics/`
    table) was never built. `training/models/sparkml_model.py` and
    `spark/streaming_job.py` (scaffold) exist but neither is this.
-3. **`AGENT_INTEGRATION.md`** — the original plan's item 7 (a short doc for
-   Ryan's RAG agent: read path via S3 gold + DynamoDB current-state
-   per `AeroFlux_DataSchemas.md`, the `AEROFLUX_AGENT_URL` contract already
-   implemented in `pages/2_Analyst.py`, and the "agent owns its own
-   vector store + LLM calls, no shared compute" boundary) — not written yet.
-4. **Distribution-shift skew** (see Known Limitations above) — none of the
+3. **Distribution-shift skew** (see Known Limitations above) — none of the
    three candidate fixes implemented.
-5. **Train + tune the real model** (`training.cli tune`) on the full 10-year
+4. **Train + tune the real model** (`training.cli tune`) on the full 10-year
    gold if not already done; confirm XGBoost beats the logistic baseline on
    real data.
-6. **Agent integration** (Ryan): wire the RAG/LangGraph analyst against the
-   data contract once `AGENT_INTEGRATION.md` exists.
-7. **Proposal polish:** note the NCEI-historical/METAR-live source split;
+5. **Agent integration** (Ryan): wire the RAG/LangGraph analyst against the
+   data contract now that `AGENT_INTEGRATION.md` exists — needs a
+   dedicated read-only IAM identity provisioned (policies already exist,
+   see `AGENT_INTEGRATION.md` §3) and, if citations matter, a small
+   `2_Analyst.py` change to actually render them.
+6. **Proposal polish:** note the NCEI-historical/METAR-live source split;
    settle the Postgres+DynamoDB story (drop MongoDB); condense Methodology
    to the big-data architecture; add data-source citations.
-8. **Later (out of 2-week scope):** RDS/MSK/EMR if the local pipeline itself
+7. **Later (out of 2-week scope):** RDS/MSK/EMR if the local pipeline itself
    needs to move off this machine (currently only storage/serving moved —
    streaming/ML stays local by design); TAF forecasts for destination
    weather; TensorFlow model; full Spark streaming path; airframe-graph
