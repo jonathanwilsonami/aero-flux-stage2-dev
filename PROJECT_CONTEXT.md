@@ -219,38 +219,65 @@ Caddyfile), `.github/workflows/deploy-ui.yml`, `tests/` (97 pass).
   missingness indicators (similar to the `include_gap_weather` indicator
   pattern) so the model can distinguish "genuinely low risk" from
   "features unknown" instead of conflating them.
-- **Live-prediction evaluation sample is still immature (right-censoring)**
-  — the forward-capture reconciliation (`aeroflux_ml/evaluate_live.py`)
-  currently shows ~1.9% actual delay rate and ~0.59 overall AUC on 4,577
-  reconciled pairs, far below BTS's ~18% base rate / ~0.88 AUC. Confirmed
-  (2026-08-12) this is NOT a reconciliation bug: the same ~2% rate appears
-  across all 5,788 completed flights in `gold_live`, not just the
-  reconciled subset. Root cause is right-censoring — 1,542,436 predictions
-  are still pending an outcome vs. 4,577 resolved, and severely delayed
-  flights take longer, in wall-clock time, to actually land, so they're
-  systematically under-represented among flights that have *resolved* so
-  far. Confirmed via percentile comparison against BTS: live's lower/
-  median `arr_delay_min` roughly tracks BTS, but the upper tail is
-  compressed (p90: live=0min vs. BTS=+34min; p99: live=+36min vs.
-  BTS=+187min) — the signature of censoring, not a shifted/wrong
-  distribution. Expected to self-correct as the pending backlog resolves
-  over the coming days; not a bug to fix, a sample-maturity issue to wait
-  out. Tracked live on the app's Model Performance page (pending vs.
-  resolved counts, per-lag-bucket table — accuracy-vs-prediction-horizon
-  will become visible there once each bucket has real volume).
-- **Live `arr_delay_min` uses ADS-B touchdown, not gate arrival — a
-  structural ~5–15min early bias.** `schema.py`'s `from_silver()` maps
-  `actual_arr` to `actual_on` (ADS-B wheels-on/touchdown), while
+- **Live-prediction evaluation is capped by a structural ground-truth
+  coverage gap, not right-censoring — it will NOT self-correct by
+  waiting.** (Revises the earlier "right-censoring, self-corrects over the
+  coming days" framing — traced deeper on 2026-08-13 and that framing was
+  wrong; this replaces it.) Live `arr_delay_min` is computed only from
+  `actual_on` (`schema.py`'s `from_silver()`:
+  `arr_delay_min = actual_arr − sched_arr`, `actual_arr` = `actual_on`),
+  and `actual_on` is populated from exactly **one** source: SWIM's
+  `arrivalInformation` message (`fusion.py`'s source-priority map —
+  `"actual_on": ["arrivalInformation"]`, no ADS-B fallback;
+  `normalizers.py`'s `normalize_arrival()` already flags it
+  `"best-effort; structure varies"`). Traced live: of flights currently
+  `flight_status = 'COMPLETED'` in Postgres, only **13.6–19.8%** have
+  `actual_on` populated at all — the FAA feed mostly never sends this
+  message, a property of the source data, not of our retention window.
+  Across all 109 `gold_live` snapshots taken so far, only 6,272 of 365,330
+  distinct flight_keys ever show `arr_delay_min` populated anywhere — a
+  **1.72% lifetime completion-capture rate**. Worse, the flights that do
+  resolve are a biased-easy subsample, not a fair one: 88.6% land early
+  (negative `arr_delay_min`), median is −5min, p90 is 0min, and only 2.26%
+  show ≥15min delay (BTS base rate is ~18–22%). Predicted-delayed flights
+  resolve at roughly 63% the rate of predicted-not-delayed ones (2.31% of
+  82,918 ever-flagged flight_keys vs. 3.68% of 12,432), consistent with
+  delayed/irregular-ops flights being less likely to get a clean SWIM
+  close-out. The 48h retention window is a secondary, minor contributor,
+  not the primary cause: for flights that *do* resolve, capture happens
+  quickly regardless of delay severity (median 2.3h from first prediction
+  to captured outcome; only one case >24h, none beyond 40.4h) — the
+  ceiling is set by whether `arrivalInformation` is ever sent at all, not
+  by how long we retain data waiting for it. **Practical effect: today's
+  live-eval numbers (~2% delay rate, ~0.59 AUC on 5,626 pairs) reflect a
+  biased-easy subsample, not the model's real performance, and letting it
+  run longer grows the pair *count* without correcting the skew.**
+  Candidate fixes (not yet done, roughly in order of leverage): (1)
+  **derive touchdown from ADS-B position data** (ground speed/altitude
+  near the destination) instead of waiting on `arrivalInformation` — ADS-B
+  coverage (~38–88% depending on flight phase) is already far better than
+  the ~14–20% `arrivalInformation` rate; (2) **persist a separate,
+  un-TTL'd flight-outcome ledger** (piggyback on `sync_cloud`'s cadence, a
+  longer DynamoDB/S3 TTL than the operational 48h state) so a flight aging
+  out of the serving window can still be reconciled later; (3) **extend
+  `RETENTION_HOURS`** (48→96+) as a cheap, low-risk mitigation — recovers
+  only the small tail near the current edge (~0.04% of resolved flights),
+  not the structural gap. Tracked live on the app's Model Performance page
+  (pending vs. resolved counts, per-lag-bucket table).
+- **Live `arr_delay_min`, when captured, uses wheels-on touchdown, not
+  gate arrival — a structural ~5–15min early bias.** `schema.py`'s
+  `from_silver()` maps `actual_arr` to `actual_on`, sourced from SWIM's
+  `arrivalInformation` message (corrected 2026-08-13 — earlier text here
+  said "ADS-B"; it isn't, see the coverage-gap bullet above for the actual
+  source and why that message is rare in the first place), while
   `from_bts()`'s `actual_arr` is BTS's `ARR_TIME` (actual *gate* arrival).
   These are different physical events — touchdown precedes gate arrival by
   taxi-in time — and live silver has no gate-arrival timestamp at all
   (`_FLIGHT_INSTANCE_COLS` only carries `actual_off`/`actual_on`, both
-  ADS-B runway events). Confirmed (2026-08-12) this is real but secondary:
-  the percentile-shape evidence above shows the dominant gap is censoring,
-  not a uniform offset (a pure taxi-time bias would shift the whole curve,
-  not truncate just the tail) — but it does nudge every live delay
-  measurement slightly early. Not fixable without live gate-arrival data,
-  which SWIM/ADS-B doesn't provide.
+  runway events). Real but secondary to the coverage gap above: it nudges
+  every *captured* live delay measurement slightly early, but doesn't
+  explain why so few flights get measured at all. Not fixable without live
+  gate-arrival data, which SWIM/ADS-B doesn't provide.
 
 ---
 
@@ -275,9 +302,12 @@ UI doesn't render `citations` yet, only `answer`). See `DEPLOYMENT.md` for
 the deploy flow and every gotcha hit getting there.
 
 **Open:**
-1. **Evaluation work** (current focus) — the live-eval sample is still
-   young (right-censored, see Known Limitations); keep it running and
-   revisit the per-lag-bucket numbers as the pending backlog resolves.
+1. **Evaluation work** (current focus) — the live-eval skew is a
+   structural ground-truth-coverage gap, not right-censoring (see Known
+   Limitations); the pending backlog will keep growing pair *count*
+   without correcting the skew. Next concrete step is one of the
+   candidate fixes there (ADS-B-derived touchdown is the highest-leverage
+   option), not just letting it run longer.
 2. **Spark batch analytics job** — the original AWS-storage plan's item 4
    (containerized PySpark reading gold from the LakeStore, delay-rate/mean-
    risk aggregations by route/carrier/hour, written back as an `analytics/`
