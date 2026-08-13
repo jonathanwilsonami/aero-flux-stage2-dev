@@ -1,0 +1,22 @@
+Title: Weather as a Delay Driver — What to Look For
+Source: Sample reference doc for AeroFlux Analyst prototype (replace with real NOAA/AWC documentation before production use)
+
+Weather is consistently one of the largest contributors to flight delay across the National
+Airspace System. The most operationally relevant conditions include:
+
+- Convective activity (thunderstorms): can trigger reroutes, ground stops, and Ground Delay
+  Programs at both origin and destination, and often has cascading effects across a wide
+  region rather than a single airport.
+- Low ceiling and visibility: forces airports to switch to lower-throughput instrument
+  approach procedures, reducing the airport acceptance rate and increasing arrival spacing.
+- Strong or gusty surface winds: can restrict runway configuration options (fewer usable
+  runways), and crosswind limits may force single-runway operations.
+- Winter weather (snow/ice): triggers deicing queues on top of any capacity restriction,
+  adding delay even after a runway reopens.
+
+For live serving, METAR observations (routine surface weather reports issued hourly, with
+special reports for rapidly changing conditions) are the standard near-real-time source.
+For historical model training, the NCEI Integrated Surface Database provides an hourly-quality
+archive. Because METAR and NCEI ISD are not field-identical, a feature-engineering layer that
+maps both into the same schema is necessary to avoid train/serve skew — a live model should
+not see a materially different feature distribution than the one it was trained on.

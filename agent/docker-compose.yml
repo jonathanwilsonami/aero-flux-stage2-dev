@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: aeroflux-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aeroflux
+      POSTGRES_PASSWORD: aeroflux_local_dev
+      POSTGRES_DB: aeroflux_rag
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  pgvector_data:

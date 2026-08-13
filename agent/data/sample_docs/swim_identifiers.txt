@@ -1,0 +1,24 @@
+Title: SWIM Flight Identifiers — flight_ref vs. GUFI
+Source: Sample reference doc for AeroFlux Analyst prototype (replace with real FAA SWIM documentation before production use)
+
+FAA System Wide Information Management (SWIM) flight messages carry two distinct identifiers
+that are easy to confuse:
+
+1. flight_ref: an identifier tied to a specific flight plan. When a flight plan is amended
+   (route change, EDCT assignment, aircraft swap), the system can issue a new flight_ref for
+   what a human would still consider "the same flight."
+
+2. GUFI (Globally Unique Flight Identifier): a stable identifier assigned once per flight
+   instance that persists across plan amendments. GUFI is the correct join key for building a
+   canonical, deduplicated per-flight record from a stream of SWIM messages, since keying on
+   flight_ref would incorrectly split one real-world flight into multiple records whenever it
+   is amended.
+
+Neither identifier is a substitute for the aircraft's physical identity. SWIM flight data does
+not publish the tail number, so tail resolution (linking a flight instance to the physical
+airframe that operates it) requires cross-referencing ADS-B broadcasts, which carry the ICAO
+24-bit address and registration, against the callsign and timing of the SWIM record. Coverage
+gaps in ADS-B feeds (e.g., ground infrastructure gaps, transponder issues) mean tail
+resolution is not always possible, which is why a resolution_status field (e.g.
+"airline_resolved", "adsb_resolved", "unresolved") is useful to carry alongside the canonical
+flight record.

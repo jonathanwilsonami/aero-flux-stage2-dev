@@ -1,0 +1,26 @@
+Title: Ground Delay Programs (GDP) — Operational Overview
+Source: Sample reference doc for AeroFlux Analyst prototype (replace with real FAA SWIM/TFMS documentation before production use)
+
+A Ground Delay Program is a traffic management initiative used when the arrival demand at an
+airport is expected to exceed its acceptance rate, most commonly because of weather, runway
+closures, or equipment outages at the destination. Rather than allowing aircraft to depart and
+then absorb delay by holding in the air, the FAA assigns each affected flight a new departure
+time, called an Expect Departure Clearance Time (EDCT), before it leaves the ground.
+
+Key characteristics:
+- GDPs are scoped to a single destination airport and apply to flights inbound to that airport
+  from a defined set of origins.
+- Average delay under a GDP is typically communicated as a program parameter and can range
+  from under 15 minutes to several hours during major weather events.
+- Flights assigned an EDCT that pushes departure into a later slot generally show a
+  FlightModify message in SWIM with the updated flight time data.
+- GDPs can be revised (extended, compressed, or purged) as conditions change, which produces
+  additional FlightModify messages for affected flights.
+- Airlines can substitute aircraft/flights within their own allocated slots without FAA
+  re-approval, which is one reason flight_ref can change while the underlying GUFI stays
+  stable.
+
+Why this matters for delay prediction: a flight departing from an airport with an active GDP,
+or arriving at one, is a strong signal of elevated delay probability independent of that
+flight's own on-time history, which is why ground-delay-program status is typically included
+as a feature in propagation-aware delay models.
