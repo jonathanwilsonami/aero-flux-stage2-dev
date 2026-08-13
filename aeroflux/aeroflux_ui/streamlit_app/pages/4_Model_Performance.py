@@ -15,9 +15,10 @@ local out/eval/ files, which don't exist on the box. Everything else
 (gold_live hex-coverage proxy) stays local-only and degrades gracefully
 where it isn't available.
 
-Live-evaluation metrics here are early and still stabilizing as more
-snapshots reconcile — see the banner below before treating any number here
-as final.
+Live-evaluation metrics here are capped by a structural ground-truth
+coverage gap (SWIM rarely publishes the arrival event live scoring needs) —
+see the banner below before treating any number here as final. This does
+NOT self-correct by waiting; see PROJECT_CONTEXT.md § Known Limitations.
 """
 from __future__ import annotations
 
@@ -77,7 +78,8 @@ def load_live_metrics() -> dict | None:
 
 def _pending_count(metrics: dict) -> int | None:
     """Predictions still awaiting a resolved outcome — the denominator that
-    makes the right-censoring caveat below concrete rather than generic.
+    makes the structural-coverage-gap caveat below concrete rather than
+    generic (most of these will never resolve — see the caveat text).
     Pulled from the reconciliation summary already embedded in
     live_metrics_latest.json (evaluate_live.py's last reconcile() run),
     not a separate file read — works identically local or cloud, and
@@ -120,25 +122,24 @@ else:
     if n_pending is not None:
         pct_resolved = 100 * n_resolved / (n_resolved + n_pending) if (n_resolved + n_pending) else 0
         st.error(
-            f"📉 **This evaluation sample is still young and under-represents delayed "
-            f"flights — read the numbers below as provisional, not the model's real "
-            f"performance.** **{n_pending:,} predictions are still pending an outcome** "
-            f"vs. **{n_resolved:,} resolved** (only {pct_resolved:.2f}% of everything "
-            f"scored so far has a known outcome). This is **right-censoring**: a "
-            f"severely delayed flight takes longer, in wall-clock time, to actually "
-            f"land, so it takes longer to show up as \"resolved\" — meaning delayed "
-            f"flights are systematically under-represented among outcomes observed "
-            f"*so far*, which depresses both the measured actual-delay-rate "
-            f"({_fmt(delay_rate)} here vs. BTS's ~18–22% base rate) and the AUC. "
-            f"Confirmed via percentile comparison against BTS (2026-08-12): live's "
-            f"median `arr_delay_min` roughly tracks BTS, but the upper tail is "
-            f"compressed (p90: live≈0min vs. BTS≈+34min) — the signature of censoring, "
-            f"not a data or reconciliation bug. **Expected to self-correct as the "
-            f"pending backlog resolves over the coming days.** See "
-            f"PROJECT_CONTEXT.md § Known Limitations for the full writeup, including a "
-            f"second, smaller, structural gap: live `arr_delay_min` uses ADS-B "
-            f"touchdown, not gate arrival (~5–15min early bias, unfixable without live "
-            f"gate-arrival data).",
+            f"📉 **This is a biased-easy subsample, not the model's real performance —"
+            f"and it will NOT self-correct by waiting.** **{n_pending:,} predictions "
+            f"are still pending an outcome** vs. **{n_resolved:,} resolved** (only "
+            f"{pct_resolved:.2f}% of everything scored so far has a known outcome). "
+            f"This isn't ordinary right-censoring — it's a **structural ground-truth "
+            f"coverage gap**: live `arr_delay_min` only gets computed when SWIM sends "
+            f"an `arrivalInformation` message, and traced live (2026-08-13) that "
+            f"message arrives for only ~14–20% of completed flights, skewed hard "
+            f"toward clean/on-time closeouts — 88.6% of flights that DO resolve land "
+            f"*early*, only 2.3% show ≥15min delay. That's why the measured "
+            f"actual-delay-rate here ({_fmt(delay_rate)}) sits far below BTS's "
+            f"~18–22% base rate: it isn't a young sample waiting to mature, it's a "
+            f"permanently filtered one — flights whose arrival was never reported "
+            f"stay unresolved forever, they don't eventually catch up. See "
+            f"PROJECT_CONTEXT.md § Known Limitations for the full trace (root cause, "
+            f"numbers, and candidate fixes — ADS-B-derived touchdown is the "
+            f"highest-leverage one) and the related, secondary ~5–15min early bias "
+            f"from touchdown-vs-gate-arrival timing.",
             icon="📉",
         )
     bts = metrics.get("bts_reference")
@@ -231,11 +232,13 @@ else:
     st.caption(
         "⚠️ Ingest was down Aug 9–11 2026; some of this data comes from that "
         "thinner window. Small-n buckets are noisy — treat n<50 as directional, "
-        "not conclusive. The `24h+` and `6-24h` buckets are hit hardest by the "
-        "right-censoring effect above (a long-lead-time prediction needs its flight "
-        "to have both departed AND landed to resolve at all) — expect those two to "
-        "gain volume slowest as the pending backlog resolves, and to be the last "
-        "ones worth trusting for \"how well do we predict N+ hours out.\""
+        "not conclusive. Every bucket draws from the same structural coverage gap "
+        "above (a prediction can only resolve at all if SWIM ever sends an "
+        "`arrivalInformation` message for that flight) — the `24h+` and `6-24h` "
+        "buckets are hit hardest since a long-lead-time prediction additionally "
+        "needs its flight to have both departed AND landed first — so expect those "
+        "two to gain volume slowest and stay the least trustworthy for "
+        "\"how well do we predict N+ hours out,\" independent of how long this runs."
     )
 
 st.divider()
