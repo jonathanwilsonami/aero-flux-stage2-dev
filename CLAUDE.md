@@ -57,6 +57,35 @@ transcript.
 - If a secret is ever exposed in a transcript or log despite this, say so
   plainly and recommend rotation; don't just quietly move on.
 
+## Lifecycle/teardown testing (hard rule)
+**Never test `cmd_down` (or any command that stops/kills processes —
+`run.sh stop`, `pkill`, `kill` on a PID from a `.*_pid` file, etc.) against
+the real running stack.** `./e2e.sh up`'s ingest/score/sync loop is a
+continuously-running production pipeline (live SWIM ingest, scoring, and
+cloud sync to S3/DynamoDB) whenever it's up — not a disposable dev
+process. This rule exists because it was broken once: smoke-testing a new
+`cmd_eval` addition's teardown integration by actually running `./e2e.sh
+down` took down a real stack that had been running continuously since
+2026-08-09 (had to be manually reconstructed and restarted from non-secret
+config sources afterward).
+- To test a lifecycle change (a new stage's start/stop wiring, a change to
+  `cmd_down`'s teardown loop, etc.): use throwaway dummy processes (e.g.
+  `sleep 999 & echo $! > out/.foo_pid`) or an isolated checkout (a `git
+  worktree`, matching how PR review merges are checked — see the
+  `pr1-merge-check` pattern) — never the PIDs in `out/.*_pid` from a stack
+  you didn't start for the test itself.
+- Before running any stop/kill command, check `ps aux` (or `cat
+  out/.*_pid` + `kill -0`) for what's *actually* running and confirm with
+  the user first if there's any chance it's the real stack, not a test
+  artifact.
+- If a live stack is ever taken down by mistake despite this, say so
+  plainly and immediately (don't quietly restart and not mention it), then
+  restore it — config for a cloud-syncing restart is reconstructable from
+  non-secret sources (`scripts/aws_setup.sh`'s bucket-naming convention,
+  `~/.aws/config` profile names, `logs/ingest.log`'s "REAL-TIME mode"
+  restart cadence for `DURATION=continuous` vs a fixed duration) without
+  needing to print any secret.
+
 ## Repo map (project dir: `aeroflux/`)
 - `aeroflux_parser/` — SWIM parse → fuse → canonical silver. Key: `fusion`,
   `identity`, `adsb`/`adsb_store` (airframe store), `airports`/`airlines` dims.

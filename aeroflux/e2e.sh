@@ -5,12 +5,21 @@
 #   ./e2e.sh up      # (re)use a trained model + ingest + score + sync + archive + UI
 #   ./e2e.sh health  # validate every stage
 #   ./e2e.sh down    # stop everything
-# Stages: train | link | ingest | score | sync_cloud | archive | ui
+# Stages: train | link | ingest | score | sync_cloud | archive | ui | eval
 #
 # sync_cloud is a no-op unless you set STATE_BACKEND=dynamodb and/or
 # LAKE_BACKEND=s3 (see aeroflux_ml/io.py / scripts/sync_cloud.sh) — with the
 # defaults (postgres/local) it still runs on schedule but does nothing each
 # cycle, so `./e2e.sh up` behaves exactly as before if you never opt in.
+#
+# eval (live-prediction reconciliation, aeroflux_ml/evaluate_live.py) is
+# OPT-IN — NOT started by `up`. It's a separate concern from serving (reads
+# predictions/gold snapshots after the fact; doesn't feed the live app's
+# predictions at all, only the Model Performance analyst page) and every
+# run so far has been a manual `python -m aeroflux_ml.evaluate_live`.
+# Start it explicitly with `./e2e.sh eval` (or fold into `up` yourself via
+# `./e2e.sh up && ./e2e.sh eval`) once you want the Model Performance page
+# refreshing on its own instead of by hand.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"     # absolute project root, wherever invoked
 cd "$ROOT"
@@ -29,6 +38,11 @@ cd "$ROOT"
                                            # sync cycle frequency on top of the dedup in
                                            # sync_cloud.py. Still configurable; no point syncing
                                            # more often than gold refreshes (run.sh REFRESH_SECONDS)
+: "${EVAL_EVERY:=1800}"                   # 30min — matches the Model Performance page's own
+                                           # st.cache_data(ttl=1800), so a fresh reconcile pass
+                                           # lines up with when the page would refresh anyway.
+                                           # evaluate_live.py is incremental/append-only, so
+                                           # running it is cheap regardless of cadence.
 : "${UI_PORT:=8501}"
 : "${RUN_DIR_FILE:=$ROOT/out/.current_run_dir}"
 : "${MODEL_LINK:=$ROOT/out/current_model.joblib}"
@@ -123,7 +137,19 @@ cmd_archive(){
   log "gold archiver -> $GOLD_ARCHIVE (hourly)"
 }
 
-# ---- 6. UI -----------------------------------------------------------------
+# ---- 6. EVAL (opt-in — NOT started by cmd_up; run `./e2e.sh eval` -------
+#         separately once you want the Model Performance page refreshing --
+#         on its own instead of by hand) -------------------------------------
+cmd_eval(){
+  log "live-eval loop every ${EVAL_EVERY}s -> out/eval/ ($LOGS/eval.log)"
+  ( while true; do
+      python -m aeroflux_ml.evaluate_live >>"$LOGS/eval.log" 2>&1
+      sleep "$EVAL_EVERY"
+    done ) & echo $! > "$ROOT/out/.eval_pid"
+  log "eval pid $(cat "$ROOT/out/.eval_pid")"
+}
+
+# ---- 7. UI -----------------------------------------------------------------
 cmd_ui(){
   [ -f "$UI_DIR/app.py" ] || { log "ERROR: no app.py under $UI_DIR (set UI_DIR=...)"; return 1; }
   command -v streamlit >/dev/null || { log "streamlit not installed"; return 1; }
@@ -182,6 +208,19 @@ cmd_health(){
     echo "ingest: STOPPED"; issues=1
   fi
 
+  # eval is opt-in (not part of `up`) — only check it, and only flag an
+  # issue, if it was actually started (out/.eval_pid exists). Otherwise
+  # every default stack would report a false "eval: STOPPED" issue for a
+  # stage nobody asked to run.
+  if [ -f "$ROOT/out/.eval_pid" ]; then
+    eval_pid=$(cat "$ROOT/out/.eval_pid" 2>/dev/null || true)
+    if [ -n "${eval_pid:-}" ] && kill -0 "$eval_pid" 2>/dev/null; then
+      echo "eval: running ($eval_pid)"
+    else
+      echo "eval: STOPPED (was started but process died)"; issues=1
+    fi
+  fi
+
   return "$issues"
 }
 
@@ -217,7 +256,7 @@ cmd_up(){
   log "ALL UP. validate: ./e2e.sh health   stop: ./e2e.sh down"
 }
 cmd_down(){
-  for p in ui archive sync score ingest; do
+  for p in ui eval archive sync score ingest; do
     pid=$(cat "$ROOT/out/.${p}_pid" 2>/dev/null || true)
     [ -n "${pid:-}" ] && kill "$pid" 2>/dev/null && echo "stopped $p ($pid)"
     rm -f "$ROOT/out/.${p}_pid"
@@ -229,7 +268,7 @@ cmd_down(){
 case "${1:-}" in
   train) cmd_train;; link) cmd_link;; ingest) cmd_ingest;; score) cmd_score;;
   sync_cloud|sync) cmd_sync_cloud;;
-  archive) cmd_archive;; ui) cmd_ui;; health|status) cmd_health;;
+  archive) cmd_archive;; ui) cmd_ui;; eval) cmd_eval;; health|status) cmd_health;;
   up|all) cmd_up;; down|stop) cmd_down;;
-  *) echo "usage: ./e2e.sh {up|health|down | train|link|ingest|score|sync_cloud|archive|ui}"; exit 1;;
+  *) echo "usage: ./e2e.sh {up|health|down | train|link|ingest|score|sync_cloud|archive|ui|eval}"; exit 1;;
 esac
