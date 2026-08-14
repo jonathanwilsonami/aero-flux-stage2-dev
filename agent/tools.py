@@ -15,7 +15,7 @@ from embeddings import embed_texts
 
 DB_DSN = os.environ.get(
     "DATABASE_URL",
-    "postgresql://aeroflux:aeroflux_local_dev@localhost:5432/aeroflux_rag",
+    "postgresql://aeroflux:aeroflux_local_dev@localhost:5433/aeroflux_rag",
 )
 FLIGHTS_PATH = os.path.join(os.path.dirname(__file__), "data", "sample_flights.json")
 
@@ -45,6 +45,14 @@ def document_search(query: str, top_k: int = 4) -> list[dict]:
     synthesis step can cite source_name for every claim it makes.
     """
     query_embedding = embed_texts([query])[0]
+    # psycopg's default Python-list adapter formats a list as a Postgres
+    # ARRAY literal ("{1,2,3}"), not pgvector's own "[1,2,3]" input syntax
+    # -- binding the raw list here silently produced zero rows on every
+    # query (found while wiring the HTTP server, 2026-08-13; verified by
+    # comparing raw SQL against the manually-built literal below, which
+    # returns real results). Build the literal explicitly instead of
+    # relying on psycopg's default adaptation.
+    vector_literal = "[" + ",".join(str(x) for x in query_embedding) + "]"
     with psycopg.connect(DB_DSN) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -55,7 +63,7 @@ def document_search(query: str, top_k: int = 4) -> list[dict]:
                 ORDER BY distance ASC
                 LIMIT %s
                 """,
-                (query_embedding, top_k),
+                (vector_literal, top_k),
             )
             rows = cur.fetchall()
     return [

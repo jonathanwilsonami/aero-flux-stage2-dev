@@ -10,7 +10,11 @@ services:
       POSTGRES_PASSWORD: aeroflux_local_dev
       POSTGRES_DB: aeroflux_rag
     ports:
-      - "5432:5432"
+      # 5433, not 5432 -- AeroFlux's own Postgres (compose.yaml at the repo
+      # root) already binds host 5432 for local dev; anyone running both
+      # stacks side by side hits a port conflict otherwise. Update
+      # DATABASE_URL to match (localhost:5433) if you override this.
+      - "5433:5432"
     volumes:
       - pgvector_data:/var/lib/postgresql/data
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql

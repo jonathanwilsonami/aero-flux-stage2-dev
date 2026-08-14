@@ -17,7 +17,7 @@ load_dotenv()
 
 DB_DSN = os.environ.get(
     "DATABASE_URL",
-    "postgresql://aeroflux:aeroflux_local_dev@localhost:5432/aeroflux_rag",
+    "postgresql://aeroflux:aeroflux_local_dev@localhost:5433/aeroflux_rag",
 )
 DOCS_DIR = os.path.join(os.path.dirname(__file__), "data", "sample_docs")
 CHUNK_SIZE = 800   # characters; simple splitter is fine for a prototype corpus
