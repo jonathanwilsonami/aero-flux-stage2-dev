@@ -16,7 +16,9 @@ container on a **Lightsail** VM (Docker + Caddy for TLS, image built and
 pushed by **GitHub Actions** to **GHCR**) reads *only* from S3 + DynamoDB,
 using read-only credentials, and never touches the local Postgres. Both the
 local app and the deployed app run the exact same `data_access.py` — the only
-difference is which env vars are set.
+difference is which env vars are set. A second, internal-only container on
+the same box runs the Aviation Operations Analyst agent (Ryan's LangGraph/
+RAG service) — see §9.
 
 ## 2. Config toggles
 
@@ -31,6 +33,7 @@ difference is which env vars are set.
 | `AWS_REGION` | region | `us-east-1` | |
 | AWS creds | — | — | `AWS_PROFILE` (local dev) or `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (deployed box — no `~/.aws`, has to be env vars) — boto3's default chain picks whichever is present, code never hardcodes one |
 | `SYNC_EVERY` | seconds | `300` | `e2e.sh`'s sync-loop cadence; matches `run.sh`'s `REFRESH_SECONDS` — no point syncing faster than gold refreshes |
+| `AEROFLUX_AGENT_URL` | URL | *(unset — local responder)* | deployed value is `http://agent:8010/ask`, hardcoded directly in `docker-compose.lightsail.yml`'s `app.environment:` (not `.env` — it's this compose file's own internal topology, not secret/per-environment, so it can't be forgotten or drift). See §9. |
 
 Leaving `STATE_BACKEND`/`LAKE_BACKEND` unset (or `postgres`/`local`) makes
 every cloud-touching piece — `sync_cloud.py`, `data_access.py` — a pure no-op
@@ -322,3 +325,122 @@ fewer than N rows if the filter match rate is low — an accepted trade,
 documented as the demo-scale choice (GSI + `Query` is the real scale path).
 Paired with bumping the UI's cache TTL 30s→300s to match `sync_cloud`'s
 actual write cadence.
+
+### 5.13 — `docker-compose.lightsail.yml`'s own healthcheck: silently overrode an already-fixed Dockerfile bug
+`aeroflux-ui` showed `unhealthy` forever, again, despite serving traffic
+fine (found 2026-08-14, while deploying the agent). Cause: this compose
+file had its *own* `app.healthcheck:` block with the old curl-based test
+(`curl --fail ...`) — a leftover from before 5.5 below was fixed. Compose's
+`healthcheck:` always overrides the image's Dockerfile `HEALTHCHECK` when
+both are present, so the image's already-correct urllib-based check never
+ran; the stale compose-level one did, and `curl` still isn't in the image
+(5.5), so it failed every time. The Dockerfile fix alone wasn't enough —
+there were two copies of the same instruction to keep in sync, and only
+one got updated. Fixed by deleting the compose-level override entirely
+(one source of truth: the image's own `HEALTHCHECK`), not by re-syncing
+the two.
+
+### 5.14 — `ChatGroq()` validates the API key eagerly, at import time, not at first call
+Deploying the agent container with no `agent.env` yet (before the Groq key
+was placed) didn't fail gracefully on the first real request — it
+crash-looped immediately on every start: `agent.py`'s module-level `llm =
+ChatGroq(...)` raises `groq.GroqError` the instant the module is imported
+(`server.py` importing `agent.py` importing `ChatGroq`) if `GROQ_API_KEY`
+isn't set, before `uvicorn` ever finishes starting. `restart:
+unless-stopped` means this just loops forever, burning CPU on repeated
+imports, rather than starting and failing individual requests. Not a bug
+to fix (there's no real way to run this agent without a key, and failing
+loud and immediately is arguably better than failing silently per-request)
+— just worth knowing so a missing-key deploy doesn't look like a hang. One
+practical consequence: `ingest.py` (which only imports `embeddings.py`,
+never `agent.py`/`tools.py`) can still run standalone against the agent's
+pgvector with no key at all — useful for seeding the doc corpus before the
+key is ready (see §9).
+
+---
+
+## 9. Agent deployment (Aviation Operations Analyst) — Option A, internal-only
+
+Deployed 2026-08-14. **Option A: a second container on the existing
+Lightsail box**, not a separate instance — chosen after actually measuring
+(`docker stats`, not guessing) that the full stack fits comfortably: app +
+caddy + agent + agent's own pgvector use **~776MiB (~20%) of the box's
+3.747GiB**, ~2.5Gi still available. The documented fallback (move the
+agent to its own small instance) wasn't needed. See `AGENT_INTEGRATION.md`
+for the wire contract and the read-only-SSO cloud-data-access path (still
+the future step — the agent currently reads sample data, not live
+S3/DynamoDB, regardless of where it's deployed).
+
+**Two new services in `docker-compose.lightsail.yml`, both internal-only —
+no host port published for either, and Caddy only proxies `app`. Nothing
+outside this box's Docker network can reach the agent or its pgvector
+directly; the only way in is `app` calling `AEROFLUX_AGENT_URL` over
+Compose's own service-name DNS:**
+
+| Service | Image | Reachable at | Notes |
+|---|---|---|---|
+| `agent` | `ghcr.io/jonathanwilsonami/aeroflux-agent` | `http://agent:8010` (internal only) | FastAPI/uvicorn, `POST /ask` — see `AGENT_INTEGRATION.md` §1 |
+| `agent-pgvector` | `pgvector/pgvector:pg16` | `agent-pgvector:5432` (internal only) | separate from AeroFlux's own Postgres entirely — different container, no host binding at all, not just a different port |
+
+**Config, in `docker-compose.lightsail.yml`:**
+- `app.environment.AEROFLUX_AGENT_URL: http://agent:8010/ask` — hardcoded
+  directly (not `.env`); it's the compose file's own internal topology,
+  not secret, not per-environment.
+- `agent.environment.DATABASE_URL` — hardcoded to
+  `postgresql://aeroflux:aeroflux_local_dev@agent-pgvector:5432/aeroflux_rag`
+  (local-dev-style credentials, matching `agent/docker-compose.yml`'s
+  local ones — not real secrets, and not reachable from outside the box's
+  Docker network regardless).
+- `agent.env_file: agent.env` (`required: false`) — **`GROQ_API_KEY` lives
+  here, on the box only** (`/home/ubuntu/aeroflux-app/agent.env`,
+  `chmod 600`). Never committed, never touches the GitHub Action — same
+  discipline as `app`'s own `.env`, just a separate file for a separate
+  secret (different service, different credential, independently
+  rotatable).
+- `agent-pgvector`'s schema init: `agent/sql/init.sql` scp'd to
+  `REMOTE_DIR/agent-sql/init.sql` and mounted read-only at
+  `/docker-entrypoint-initdb.d/init.sql` — the box doesn't have the repo
+  source checked out (image-pull-only, per §4's pattern), so this one
+  small file is scp'd alongside `docker-compose.lightsail.yml` and
+  `Caddyfile` rather than baked into a custom pgvector image.
+
+**CI:** `.github/workflows/deploy-agent.yml` mirrors `deploy-ui.yml`
+exactly — build+push `ghcr.io/jonathanwilsonami/aeroflux-agent` on
+`agent/**` pushes, SSH redeploy gated by the **same** `DEPLOY_ENABLED`
+variable (one gate for the whole box; deliberately not a second variable
+to remember). The deploy step only touches `agent`+`agent-pgvector`
+(`pull` + `up -d --force-recreate` those two service names specifically),
+never `app`/`caddy` — that's `deploy-ui.yml`'s job.
+
+**Doc corpus ingestion** — `agent/ingest.py` doesn't import `agent.py`/
+`tools.py` (only `embeddings.py`), so it needs no Groq key and can run
+before or independent of the agent container being up. Run as a one-off
+against the box's `agent-pgvector`:
+```bash
+cd /home/ubuntu/aeroflux-app
+docker compose -f docker-compose.lightsail.yml run --rm --no-deps \
+  --entrypoint "python ingest.py" \
+  -e DATABASE_URL="postgresql://aeroflux:aeroflux_local_dev@agent-pgvector:5432/aeroflux_rag" \
+  agent
+```
+
+**Verifying** (Streamlit renders client-side over websocket, so `curl`
+can't show the chat UI — same limitation as §5's KPI banner; verify
+*inside* the running container instead, same pattern):
+```bash
+docker exec -e PYTHONPATH=/app aeroflux-ui python -c "
+from streamlit.testing.v1 import AppTest
+at = AppTest.from_file('/app/pages/2_Analyst.py', default_timeout=60)
+at.run()
+at.chat_input[0].set_value('<a real question>').run()
+print(at.exception)             # expect: ElementList() (empty)
+print(at.markdown[-2].value)    # expect: a real, grounded answer
+"
+```
+Confirmed 2026-08-14: real Groq answer, correct `📎 Sources:` citation,
+zero exceptions — both via this in-container check and a direct internal
+HTTP call to `http://agent:8010/ask` from inside `aeroflux-ui`.
+
+**Gotchas hit getting this working:** see §5.13 (compose's own stale
+healthcheck override) and §5.14 (`ChatGroq()` fails at import time, not
+first call, if the key is missing).
