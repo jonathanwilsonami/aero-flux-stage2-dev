@@ -227,6 +227,37 @@ CV), `evaluate`, `compare`, `registry` (local runs + optional MLflow), `runner`,
   (default 12h) — the refresh floor exists so a genuinely-static-but-still-
   current flight (e.g. PLANNED, hours before departure) doesn't silently
   fall out of DynamoDB when its TTL lapses from never being re-written.
+- **A relaunch loop with zero backoff turns any fast-failing subprocess
+  into a silent, resource-burning busy-loop, not a clean retry.**
+  `e2e.sh`'s `DURATION=continuous` ingest loop (`while true; do ./run.sh
+  stream 3600; done`) relaunches unconditionally — which looks right for
+  "a normal 1h session ended, start the next one," but also means a
+  FAST-FAILING invocation (any reason) respawns immediately, forever, with
+  no visibility. Real incident (2026-08-14): two lines accidentally landed
+  in `aeroflux/.env` using YAML-style `KEY:` instead of `KEY=` (see next
+  bullet) — under `run.sh`'s `set -e`, that killed `run.sh` at the `.env`
+  sourcing line on every single invocation, before ingest ever started,
+  and the zero-backoff loop respawned it instantly — 16M+ repeated log
+  lines, an 800MB+ log file, and *hours* of zero real ingest that looked
+  from the outside exactly like "a session ended and wasn't relaunched."
+  Fixed two ways: `e2e.sh`'s loop now backs off 30s only on a non-zero
+  exit (a clean completion still relaunches with zero delay — genuinely
+  continuous, not slowed down); `run.sh`'s own `.env` sourcing is no
+  longer fatal (`if ! . ./.env; then warn; fi` instead of a bare `set -e`
+  sourcing line) so one bad line can't silently take the whole pipeline
+  down for hours again.
+- **`aeroflux/.env` and `agent/.env` are different files with different
+  secrets — don't cross-contaminate them.** `GROQ_API_KEY` and
+  `AEROFLUX_AGENT_URL` have no business in `aeroflux/.env` (nothing in
+  `aeroflux/` reads either) but ended up there anyway (above bullet) —
+  `GROQ_API_KEY` belongs only in `agent/.env` (local) / `agent.env` (the
+  Lightsail box); `AEROFLUX_AGENT_URL` for local Streamlit testing is a
+  shell env var passed to `streamlit run app.py`, not a `.env` line at
+  all. If `run.sh`/`e2e.sh` suddenly can't source `.env`, check for a
+  stray `KEY:` line (YAML-style colon) before assuming anything deeper is
+  wrong — `grep -noE '^[A-Za-z_][A-Za-z0-9_]*:' .env` finds one without
+  printing any values (see CLAUDE.md § Secrets handling for why that
+  matters).
   Verified live: two back-to-back cycles went from 47,806/17,489
   (state/prediction) written to 0/0 once the cache was warm. `SYNC_EVERY`
   default is now 600s (was 300s) for the same reason. A GSI (Scan ->
