@@ -1,0 +1,88 @@
+name: Deploy Agent
+
+# Builds + pushes the Aviation Operations Analyst agent image on every push
+# touching agent/**, then (same DEPLOY_ENABLED gate as deploy-ui.yml)
+# redeploys it on Lightsail. Uses the built-in GITHUB_TOKEN for GHCR
+# (packages: write) -- no separate PAT needed. Mirrors deploy-ui.yml
+# structure on purpose -- same box, same gate, same pattern.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - ".github/workflows/deploy-agent.yml"
+  workflow_dispatch: {}
+
+env:
+  IMAGE: ghcr.io/jonathanwilsonami/aeroflux-agent
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha_tag: ${{ steps.meta.outputs.sha_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "sha_tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy-gate diagnostics (no secret values printed, just presence)
+        run: |
+          echo "DEPLOY_ENABLED (repo variable) = '${{ vars.DEPLOY_ENABLED }}'"
+          if [ "${{ vars.DEPLOY_ENABLED }}" = "true" ]; then
+            echo "-> deploy job WILL run."
+          else
+            echo "-> deploy job will be SKIPPED. Fix: Settings -> Secrets and"
+            echo "   variables -> Actions -> Variables tab (not Secrets) on"
+            echo "   THIS repo -> set DEPLOY_ENABLED to exactly 'true'."
+          fi
+          echo "LIGHTSAIL_SSH_HOST secret present: ${{ secrets.LIGHTSAIL_SSH_HOST != '' }}"
+          echo "LIGHTSAIL_SSH_KEY secret present:  ${{ secrets.LIGHTSAIL_SSH_KEY != '' }}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: agent
+          file: agent/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.sha_tag }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Same gate as deploy-ui.yml's `deploy` job -- one repo variable
+    # controls hands-off SSH redeploy for the whole box, regardless of
+    # which service's image changed. Skips cleanly (doesn't fail the
+    # workflow) until enabled; build-and-push above still runs and
+    # succeeds independently either way, so the image is always available
+    # on GHCR to pull manually.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    steps:
+      - name: Redeploy agent on Lightsail
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.LIGHTSAIL_SSH_HOST }}
+          username: ${{ secrets.LIGHTSAIL_SSH_USER || 'ubuntu' }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/aeroflux-app
+            # Only touches agent + its pgvector -- app/caddy are deploy-ui.yml's
+            # concern. Requires docker-compose.lightsail.yml on the box to
+            # already have the agent/agent-pgvector services defined (scp'd
+            # manually the first time -- see DEPLOYMENT.md).
+            docker compose -f docker-compose.lightsail.yml pull agent agent-pgvector
+            docker compose -f docker-compose.lightsail.yml up -d --force-recreate agent agent-pgvector

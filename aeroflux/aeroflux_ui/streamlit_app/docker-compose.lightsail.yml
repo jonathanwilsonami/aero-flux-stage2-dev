@@ -31,13 +31,24 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      # Internal Docker-network address of the agent service below (Level
+      # 2 integration, see AGENT_INTEGRATION.md) -- Compose's own DNS
+      # resolves "agent" to that container; nothing outside this box's
+      # Docker network can reach it. Not secret (it's just this compose
+      # file's own internal topology), so it's set directly here rather
+      # than needing a line in .env -- can't be forgotten or drift.
+      AEROFLUX_AGENT_URL: http://agent:8010/ask
     ports:
       - "8501:8501"    # direct access — always on, independent of Caddy
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    # No compose-level healthcheck override -- the image's own Dockerfile
+    # HEALTHCHECK (urllib-based; python:3.11-slim has no curl, see that
+    # Dockerfile's comment) already does this correctly. A stale curl-based
+    # override HERE silently reported "unhealthy" forever despite the app
+    # genuinely serving traffic (found 2026-08-14) -- the Dockerfile fix
+    # for this exact bug had landed already, but this compose file's own
+    # duplicate healthcheck: block was never updated to match, so it kept
+    # overriding the correct one. One source of truth now, not two.
 
   caddy:
     image: caddy:2-alpine
@@ -53,6 +64,48 @@ services:
     depends_on:
       - app
 
+  # --- Aviation Operations Analyst agent (Level 2 integration) -----------
+  # Internal only, on purpose: neither service below publishes a host
+  # port, and Caddy only proxies `app`. The only way to reach the agent
+  # is from inside this box's Docker network (i.e. from `app`, via
+  # AEROFLUX_AGENT_URL above) -- nothing external can hit it directly.
+  # Data access stays sample-based for now (agent/tools.py's
+  # data/sample_flights.json) -- swapping to the real S3/DynamoDB read
+  # path is a separate fast-follow, see AGENT_INTEGRATION.md.
+  agent:
+    image: ghcr.io/jonathanwilsonami/aeroflux-agent:${AGENT_IMAGE_TAG:-latest}
+    container_name: aeroflux-agent
+    restart: unless-stopped
+    env_file:
+      # GROQ_API_KEY lives here, on the box only -- never committed, never
+      # touches the GitHub Action. Not the same file as `app`'s .env
+      # above (different service, different secret).
+      - path: agent.env
+        required: false
+    environment:
+      # agent-pgvector below, by Compose service-name DNS -- not
+      # localhost:5433 (that's only for running the agent outside Docker,
+      # e.g. local dev against `agent/docker-compose.yml`).
+      DATABASE_URL: postgresql://aeroflux:aeroflux_local_dev@agent-pgvector:5432/aeroflux_rag
+    depends_on:
+      - agent-pgvector
+
+  agent-pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: aeroflux-agent-pgvector
+    restart: unless-stopped
+    environment:
+      # Local-dev-only credentials (same as agent/docker-compose.yml) --
+      # not real secrets, and not reachable from outside this box's
+      # Docker network anyway (no host port published).
+      POSTGRES_USER: aeroflux
+      POSTGRES_PASSWORD: aeroflux_local_dev
+      POSTGRES_DB: aeroflux_rag
+    volumes:
+      - agent_pgvector_data:/var/lib/postgresql/data
+      - ./agent-sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
 volumes:
   caddy_data:
   caddy_config:
+  agent_pgvector_data:
