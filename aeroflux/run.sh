@@ -13,7 +13,26 @@
 # WEATHER=1 to add live METAR features; STORAGE_DEST=s3://bucket/path to sync.
 set -euo pipefail
 
-[ -f .env ] && { set -a; . ./.env; set +a; }
+# A single malformed .env line (e.g. "KEY: value" instead of "KEY=value" --
+# happened for real, 2026-08-14, two lines accidentally using YAML-style
+# colons) used to kill this ENTIRE script instantly, every single
+# invocation, via set -e -- and since e2e.sh's continuous-mode loop
+# respawns `run.sh stream` with zero backoff on failure, that turned into
+# an hours-long silent busy-loop (millions of repeated "command not
+# found" lines, ingest never actually running) rather than a clean error.
+# `if ! . ./.env` is exempt from errexit (its exit status is being
+# tested), so a bad line now produces a loud warning and best-effort
+# sourcing of whatever else is valid, instead of nuking the whole run.
+if [ -f .env ]; then
+  set -a
+  if ! . ./.env; then
+    echo "WARNING: .env did not source cleanly (a line likely uses ':' " >&2
+    echo "instead of '=', or similar) -- continuing with whatever loaded " >&2
+    echo "before the failure. Fix .env; this is not fatal but may mean " >&2
+    echo "some expected config is missing." >&2
+  fi
+  set +a
+fi
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 PG_HOST="${POSTGRES_HOST:-localhost}"; PG_PORT="${POSTGRES_PORT:-5432}"

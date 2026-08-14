@@ -83,10 +83,31 @@ cmd_link(){
 }
 
 # ---- 2. INGEST (live pipeline via run.sh) ----------------------------------
+# Continuous mode relaunches `run.sh stream 3600` in a loop -- swim_to_kafka.py
+# is bounded to that same 3600s per session (a clean, deliberate completion,
+# not a crash), so this loop is what makes DURATION=continuous genuinely
+# continuous across those boundaries. A clean completion (rc=0, from
+# run.sh's own cmd_stop) relaunches IMMEDIATELY, no artificial delay. A
+# FAILING relaunch attempt (rc!=0 -- run.sh dying early for any reason, e.g.
+# the .env gotcha in run.sh's own comment) gets a short backoff first --
+# found for real 2026-08-14: with zero backoff, a fast-failing run.sh
+# invocation turned into an hours-long silent busy-loop (millions of log
+# lines, ingest never actually running) instead of a visible, rate-limited
+# retry. Backoff is deliberately short (30s), not exponential -- this
+# should be rare now that run.sh's own .env sourcing is non-fatal (see its
+# comment), so a quick retry beats a slow one for the ordinary "real error,
+# fixed within a minute" case.
 cmd_ingest(){
   log "starting live ingestion (duration=$DURATION) -> $LOGS/ingest.log"
   if [ "$DURATION" = "continuous" ]; then
-    ( while true; do ./run.sh stream 3600 >>"$LOGS/ingest.log" 2>&1; done ) & echo $! > "$ROOT/out/.ingest_pid"
+    ( while true; do
+        ./run.sh stream 3600 >>"$LOGS/ingest.log" 2>&1
+        rc=$?
+        if [ "$rc" -ne 0 ]; then
+          echo "$(date +%H:%M:%S) | e2e | run.sh stream exited non-zero ($rc) -- backing off 30s before relaunch" >>"$LOGS/ingest.log"
+          sleep 30
+        fi
+      done ) & echo $! > "$ROOT/out/.ingest_pid"
   else
     ( ./run.sh stream "$DURATION" >>"$LOGS/ingest.log" 2>&1 ) & echo $! > "$ROOT/out/.ingest_pid"
   fi
