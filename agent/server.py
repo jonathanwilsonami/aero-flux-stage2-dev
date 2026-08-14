@@ -104,9 +104,22 @@ def _build_input_messages(req: AskRequest) -> list[BaseMessage]:
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest) -> AskResponse:
     messages = _build_input_messages(req)
-    result = aeroflux_analyst_graph.invoke({"messages": messages})
-    final_message = result["messages"][-1]
-    answer = final_message.content if isinstance(final_message.content, str) else str(final_message.content)
+    try:
+        result = aeroflux_analyst_graph.invoke({"messages": messages})
+        final_message = result["messages"][-1]
+        answer = final_message.content if isinstance(final_message.content, str) else str(final_message.content)
+    except Exception as e:
+        # Safety net, not the primary fix -- agent.py's analyst_node
+        # already catches and recovers from the known Groq/Llama
+        # tool_use_failed quirk (salvage the answer out of the error
+        # body, or retry once with tools unbound). This is for whatever
+        # gets past that (the retry itself failing, or an unrelated
+        # error): 2_Analyst.py already handles a non-2xx gracefully
+        # ("Agent unavailable"), but a 200 with an honest, specific
+        # in-band message is better UX than that generic one, and never
+        # surfaces a bare 500/stack trace to the caller either way.
+        answer = f"Sorry, I had trouble answering that ({type(e).__name__}) -- please try rephrasing or ask again."
+        return AskResponse(answer=answer, citations=[])
     return AskResponse(answer=answer, citations=extract_citations(answer))
 
 
