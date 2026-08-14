@@ -41,11 +41,23 @@ Rules you must follow:
    shap_explanation_tool, or event_reconstruction_tool again for that
    flight.
 2. Relevant document excerpts have ALREADY been retrieved and provided in
-   a system message with bracketed [source_name] tags. Base conceptual
-   answers on THOSE excerpts only and cite the source_name shown. Never
-   invent a source name or describe a system/document that wasn't given to
-   you. If the provided excerpts don't cover the question, say so rather
-   than fabricating an answer.
+   a system message, each one prefixed with its bracketed source name,
+   e.g. "[ground_delay_programs.txt] Ground Delay Programs slow...". Base
+   conceptual answers on THOSE excerpts only.
+   CITATION FORMAT (required, not optional): for every sentence or claim
+   in your answer that draws on one of those excerpts, end it with that
+   excerpt's exact bracketed tag, copied verbatim -- e.g.:
+       "Ground Delay Programs are issued when arrival demand at an
+       airport is forecast to exceed capacity [ground_delay_programs.txt]."
+   - Cite ONLY source names that literally appear in the excerpts you were
+     given for THIS question. Never invent a source name, never cite a
+     document or system that wasn't shown to you, and never reuse a
+     source name from an earlier turn if it wasn't given to you again now.
+   - If a claim doesn't come from a retrieved excerpt (e.g. it comes from
+     the retrieved flight data in rule 1, or is your own synthesis), do
+     NOT attach a document tag to it.
+   - If the provided excerpts don't cover the question, say so plainly
+     rather than fabricating an answer or citation.
 3. You explain and inform; you do NOT make or recommend operational
    decisions (e.g. do not tell a controller to hold a flight, do not tell an
    airline to cancel a flight). If asked to make such a decision, explain
@@ -173,9 +185,22 @@ def prefetch_node(state: AgentState) -> AgentState:
 
 
 def analyst_node(state: AgentState) -> AgentState:
-    messages = state["messages"]
-    if not any(isinstance(m, SystemMessage) for m in messages):
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+    # ALWAYS prepend the real SYSTEM_PROMPT, first, ahead of anything
+    # else. This used to be conditional ("only if no SystemMessage exists
+    # yet"), which sounds reasonable but was actually a bug: prefetch_node
+    # unconditionally adds its own SystemMessage (the doc-excerpts note)
+    # before analyst_node ever runs, so the condition was False on every
+    # normal turn -- SYSTEM_PROMPT (grounding rules, citation format,
+    # the operational-decision guardrail instructions) was silently NEVER
+    # sent to the model at all. Found 2026-08-14 while chasing why the
+    # real Groq model wasn't emitting [source_name] citation tags: it had
+    # never been told the citation format, or any other SYSTEM_PROMPT
+    # rule, in the first place. Safe to always prepend -- this builds a
+    # local list for this one llm.invoke() call only; it's never written
+    # back to graph state (only `response` is, via the add_messages
+    # reducer), so looping back through this node from the tools edge
+    # can't duplicate it.
+    messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
     response = llm.invoke(messages)
     return {"messages": [response]}
 

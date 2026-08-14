@@ -1,5 +1,11 @@
 # Envs
 *.env*
+# ...except templates -- meant to be committed (placeholders only, no
+# secrets); *.env* above was silently blocking these from ever landing in
+# git (found 2026-08-13: agent/README.md referenced a .env.example that
+# had never actually been committed because of this exact pattern).
+!.env.example
+!**/.env.example
 
 # Notes
 prompts/
@@ -29,11 +35,13 @@ aeroflux/data/*
 # !aeroflux/aeroflux_parser/data/*
 
 
-# Python 
+# Python
 __pycache__/
 *.py[cod]
 *.so
-*.ipynb_checkpoints 
+*.ipynb_checkpoints
+.venv/
+venv/
 .pytest_cache/*
 .pytest_cache*
 dist/
