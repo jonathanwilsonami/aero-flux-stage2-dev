@@ -14,9 +14,10 @@ import os
 import re
 from typing import Annotated, TypedDict
 
+import groq
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
@@ -67,6 +68,11 @@ Rules you must follow:
    say so plainly rather than guessing or giving generic advice.
 5. Keep answers concise and structured -- lead with the direct answer, then
    the supporting evidence.
+6. If everything you need is already in the system messages above (rules
+   1-2), just answer in plain text -- do NOT call a function/tool. Only
+   call a tool when you genuinely need data that hasn't already been
+   provided. Never call a tool named "none" or call a tool just because
+   one is available.
 """
 
 
@@ -201,8 +207,68 @@ def analyst_node(state: AgentState) -> AgentState:
     # reducer), so looping back through this node from the tools edge
     # can't duplicate it.
     messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
-    response = llm.invoke(messages)
+    try:
+        response = llm.invoke(messages)
+    except groq.BadRequestError as e:
+        response = _handle_tool_use_failed(e, messages)
     return {"messages": [response]}
+
+
+# Groq/Llama tool-calling quirk (documented, not rare on this model+host
+# combo): the model sometimes emits a malformed tool call -- literally
+# `<function=none>...` -- when it means "no tool needed, just answer
+# directly" (rule 6 in SYSTEM_PROMPT above nudges against this, but
+# doesn't eliminate it -- it's a sampling-level quirk, not a prompt bug).
+# Groq's API rejects the malformed call with a 400 `tool_use_failed`
+# before it ever reaches us as a normal AIMessage. Found 2026-08-14: the
+# model's actual answer is usually sitting right there in the error
+# body's `failed_generation` field, discarded for nothing. Two-step
+# recovery, neither of which should ever surface as a 500:
+#   1. Try to salvage real answer text out of failed_generation (fast, no
+#      extra API call).
+#   2. If that doesn't look like a real answer, retry once with tools
+#      unbound (llm_no_tools) -- prefetch_node already supplied
+#      everything this turn needs (doc excerpts + flight data), so
+#      tool-calling was never actually required; removing the tool
+#      schema removes the failure mode, not just papers over it.
+_FUNCTION_TAG_RE = re.compile(r"<function=[^>]*>(.*?)(?:</function>|$)", re.DOTALL)
+_MIN_SALVAGED_LEN = 20  # guards against salvaging "none" or empty noise as a real answer
+
+
+def _salvage_failed_generation(text: str) -> str | None:
+    if not text or not text.strip():
+        return None
+    m = _FUNCTION_TAG_RE.search(text)
+    inner = (m.group(1) if m else text).strip()
+    if not inner:
+        return None
+    # The malformed "tool call" body is often JSON with the real answer
+    # under a plausible key; if so, prefer that over the raw JSON text.
+    try:
+        parsed = json.loads(inner)
+    except (json.JSONDecodeError, TypeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        for key in ("answer", "content", "response", "text"):
+            val = parsed.get(key)
+            if isinstance(val, str) and len(val.strip()) >= _MIN_SALVAGED_LEN:
+                return val.strip()
+        return None  # a dict but no recognizable text field -- don't guess
+    return inner if len(inner) >= _MIN_SALVAGED_LEN else None
+
+
+def _handle_tool_use_failed(e: groq.BadRequestError, messages: list) -> AIMessage:
+    body = e.body if isinstance(e.body, dict) else {}
+    err = body.get("error", {}) if isinstance(body, dict) else {}
+    if err.get("code") == "tool_use_failed":
+        salvaged = _salvage_failed_generation(err.get("failed_generation", ""))
+        if salvaged:
+            return AIMessage(content=salvaged)
+    # Salvage didn't produce a usable answer (or this was some other 400) --
+    # retry once without tools bound. Let this one raise if it also fails;
+    # server.py's ask() handler catches it there and returns a graceful
+    # response rather than a bare 500.
+    return llm_no_tools.invoke(messages)
 
 
 def tools_node(state: AgentState) -> AgentState:
