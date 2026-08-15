@@ -1,8 +1,10 @@
 # AeroFlux
 
-**Real-time flight-delay prediction over FAA SWIM + ADS-B + weather**
+**A real-time, network-aware intelligence layer for cascading delay — fusing FAA SWIM, ADS-B, and weather**
 
-**Live demo:** [aeroflux.duckdns.org](https://aeroflux.duckdns.org)
+**See AeroFlux Application Live:** [aeroflux.duckdns.org](https://aeroflux.duckdns.org)
+
+**See Project Site Page for more detailed info and demos:** [Project Site Page](https://jonathanwilsonami.github.io/aero-flux-stage2-dev/)
 
 ---
 
@@ -21,27 +23,42 @@
 
 ---
 
-## Problem
+## Problem 
 
-The U.S. National Airspace System is a tightly-coupled physical network: an
-aircraft, a crew, and a gate are shared resources that get reused all day, so
-a disturbance at one airport doesn't stay local — it propagates through
-aircraft rotation and shared airport queues until it shows up as a delay
-somewhere else, hours later and states away. Predicting that propagation
-in real time, from live, incomplete, streaming data, is a harder and more
-general problem than predicting any single flight's delay from a clean
-historical record.
+**The problem.** In tightly-coupled physical systems, failures rarely stay
+local. In the U.S. National Airspace System, a single delayed flight propagates —
+through the same aircraft's next leg, through shared airport queues — until a
+local disturbance becomes a network-wide disruption. Existing tools are largely
+**reactive** and **siloed**: they detect problems, or model one organization's
+slice, but don't fuse live signals across the network to anticipate how
+disruptions will cascade.
 
-AeroFlux is a proof-of-concept for that broader problem — **real-time
-perception of cascading state in a tightly-coupled physical system** — with
-flight-delay prediction as the concrete, measurable instance. The model
-treats aircraft rotation (which airframe flew the previous leg, and how
-late) as *one nullable signal channel* among several: airport demand,
-weather, and schedule form an always-available backbone that the prediction
-degrades onto gracefully when rotation can't be resolved from live data,
-rather than depending on it outright.
+**The gap.** Static risk models name the failure modes, but they don't show
+which are *aligning*, or how fast. Complex systems fail when disruptions
+propagate faster than their defenses can adapt.
 
-## Solution
+## Solution 
+
+### Long-Term Vision
+
+**AeroFlux** is a real-time, network-aware intelligence layer that fuses
+heterogeneous live signals — flight state, aircraft position, weather — into a
+single operational view, predicts emerging delay risk, and surfaces how those
+risks propagate across the network. It turns operations from *reactive* to
+*anticipatory*.
+
+**Flight delay as a proving ground.** Delay propagation is a measurable proxy
+for broader cyber-physical risk: it exhibits the same cascading network
+dynamics, has abundant public ground truth, and keeps prediction errors
+low-stakes — ideal for developing and validating methods before applying them to
+higher-consequence systems. AeroFlux uses flight delay as its proof-of-concept;
+the architecture — real-time fusion, propagation-aware modeling, explainable
+analysis — is designed to generalize to other safety-critical, tightly-coupled
+domains.
+
+### Stage 2 Solution
+
+Of course ambitious projects are rarely built in a day, so Stage 2 deliberately scopes down to the foundation the larger vision depends on: a scalable, portable, real-time platform that can ingest, fuse, and reason over live aviation data — with flight-delay prediction as the concrete proof-of-concept. The goal here was not a novel delay algorithm but the *infrastructure* to fuse heterogeneous streams into a single operational view and serve predictions from it in real time. What follows is how that pipeline is built end to end.
 
 AeroFlux fuses **live FAA SWIM** flight-plan/track messages with **ADS-B**
 (airframe identity) and **weather** (METAR/NCEI) into a validated per-flight
@@ -55,6 +72,8 @@ state, in three tiers:
   serving, so a model trained on years of historical BTS data runs
   *unchanged* on live SWIM data — parity by construction, not convention.
 
+> See [`docs/DATA_DICTIONARY.md`](docs/DATA_DICTIONARY.md) for field-level definitions across the bronze/silver/gold tiers, [`docs/SCHEMA.md`](docs/SCHEMA.md) for the canonical flight-instance schema and validation contract, and [`aeroflux_ml/schema.py`](aeroflux_ml/schema.py) for the schema definitions in code.
+
 An **XGBoost** classifier scores gold features into a delay probability.
 Predictions and current flight state sync out to **S3 + DynamoDB**; an
 always-on **Streamlit** app (containerized, deployed on Lightsail behind
@@ -62,12 +81,16 @@ Caddy/TLS, built and pushed by GitHub Actions) reads *only* from that cloud
 copy — never the local database — so the live demo stays up independent of
 whatever the local ingest machine is doing.
 
+> See [`configs/training.yaml`](configs/training.yaml) for the training configuration (data range, features, hyperparameters, split/CV/tuning), [`aeroflux_ml/feature_prep.py`](aeroflux_ml/feature_prep.py) for the shared train/serve feature contract, and [`aeroflux_ml/training/`](aeroflux_ml/training/) for the training pipeline. See the [Reproducing Results](#reproducing-results) section to train your own model.
+
 All of this is a **config flip, not two codebases**: every storage call goes
 through a `StateRepository`/`LakeStore` abstraction
 (`aeroflux_ml/io.py`) selected by `STATE_BACKEND`/`LAKE_BACKEND` env vars —
 `postgres`/`local` (default, zero cloud dependency, what CI and local dev
 use) or `dynamodb`/`s3` (what the deployed app uses). The whole pipeline is
 container-first so it runs the same on a laptop and in the cloud.
+
+> See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the full backend-configuration and deployment details, and [`aeroflux_ml/io.py`](aeroflux_ml/io.py) for the storage abstraction itself.
 
 ## AeroFlux Demo
 
