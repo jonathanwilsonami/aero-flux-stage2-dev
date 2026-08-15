@@ -111,44 +111,76 @@ forecasting, simulation, data science, and AI-assisted analysis.
 
 ## Problem Statement
 
-<!-- TODO: State the specific problem this project solves, in your own framing.
-The one to sharpen: it's NOT "predict flight delays" (well-trodden). It's
-"perceive cascading state in a tightly-coupled physical system in real time,
-anticipate propagation, and support action before the window closes — with
-flight delay as the proof-of-concept." Keep it 1-2 paragraphs. This is the
-paragraph that tells the reader why the project is more than a delay model. -->
+### The Problem: Cascading Failure in Tightly-Coupled Systems
 
-_TODO: problem statement._
+A **flight delay** — an arrival later than scheduled, conventionally by 15 or
+more minutes — is rarely an isolated event. Aircraft fly sequential legs, so a
+late inbound flight delays its own next departure (**rotational propagation**);
+airports have finite runway and gate capacity, so congestion at one flight's
+origin ripples to every flight sharing that resource (**queue propagation**).
+Through these mechanisms, a single local disturbance becomes a network-wide
+disruption. This is **delay propagation**, and it matters operationally because
+the window to act on a disruption closes as it spreads — by the time a cascade
+is visible in aggregate, the cheapest interventions are already gone.
 
-## Contribution {#sec-contribution}
+Compounding this, live operational data arrives as **heterogeneous, imperfect
+streams** — FAA SWIM flight messages, ADS-B aircraft positions, weather
+observations — that share no universal key and are measured differently from the
+historical records used to train models (**distribution shift**). Fusing these
+into a single, queryable operational view requires backward-looking temporal
+joins, UTC normalization, spatial matching, and entity resolution across systems
+that don't agree on identity. This is the same class of real-time,
+multi-sensor data-fusion problem now central to edge AI, autonomy, and robotics:
+large, fast, noisy signals that must be fused and reasoned over in real time.
 
-<!-- TODO: THE most important section for novelty. Argue what AeroFlux
-contributes BEYOND flight-delay prediction. Anchor on:
- - Propagation-aware modeling of cascading state (rotation as one nullable
-   channel over an always-available demand/weather/schedule backbone).
- - The Swiss Cheese Model (Reason) framing — seeing the holes align in time to act.
- - Generalization toward cyber-physical intelligence (sensors, robotics,
-   multi-domain propagation) — flight delay is the instance, not the point.
- - The engineering contribution: train/serve parity by construction, a portable
-   local<->cloud platform, honest live evaluation of a streaming predictor.
-State clearly what is genuinely new vs. what is standard. -->
+### Contribution
 
-_TODO: contribution — the "why should anyone care" argument._
+Complex systems fail when disruptions propagate faster than their defenses can
+adapt. Reason's Swiss Cheese model frames accidents as the momentary alignment
+of holes across successive layers of defense — but the classic model is static.
+It names the holes; it does not show which are aligning, or how fast. In a
+live, tightly-coupled system, the holes are *moving*.
 
-## Scope
+AeroFlux's contribution is a **dynamic defensive layer**: one that fuses live
+signals to see the holes forming, predicts their alignment, and gives operators
+time to act. Concretely, this means (1) real-time fusion of heterogeneous
+aviation and weather streams into a canonical, propagation-aware per-flight
+state; (2) predictive modeling of emerging delay risk with the network context
+(rotation, demand, weather) that drives propagation; and (3) an explainable
+analyst layer that makes those predictions inspectable in natural language.
 
-The long-term vision for AeroFlux is ambitious and continues to evolve. This
-project focuses on building a scalable, modular, configurable, portable, and
-decoupled big-data platform that can ingest, fuse, process, and analyze aviation
-and weather data in real time, establishing the technical foundation for future
-AeroFlux capabilities. Flight-delay prediction serves as the primary use case,
-but the architecture is designed to support additional applications, including
-congestion analysis, delay-propagation modeling, operational monitoring,
-decision support, and agentic AI. Stage 1 established a historical
-machine-learning pipeline and interactive prototype [@wilson2026flightdelay];
-this work extends that with a live data platform, baseline-vs-advanced model
-comparison, cloud deployment, live-prediction evaluation, and an explainable
-analyst agent prototype.
+We use the U.S. National Airspace System as a **proving ground**. Flight delay
+was chosen deliberately — not because it is unsolved, but because it is
+well-studied, has abundant public ground truth, and keeps prediction errors
+low-stakes, giving rapid feedback for developing and validating methods. The
+delay problem is the instance; the contribution is the *approach* — a
+real-time, network-aware intelligence layer for anticipating cascading
+consequences in tightly-coupled systems — which is designed to extend to other
+safety-critical cyber-physical domains.
+
+
+### Scope and Vision
+
+This stage focused primarily on building the **infrastructure** such a layer
+requires: portable real-time ingestion and fusion, a train/serve-consistent
+feature pipeline, cloud-backed serving, live evaluation, and an explainable
+agent. It is foundation, not final form.
+
+The longer-term vision is cyber-physical situational awareness for complex
+adaptive systems — emphasizing data fusion, propagation modeling, downstream-
+effect reasoning, and decision intelligence. Natural next directions include
+network-aware simulation, an operational digital twin of the airspace, and
+agentic reasoning over fused state; further out, the same fusion-and-propagation
+core could extend beyond aviation toward a multi-domain autonomy and
+decision-support layer. We hold these directions as directions, not commitments —
+broad, foundational work of this kind is most valuable when it leaves room for
+the solution space to reveal where it should go next.
+
+**Positioning.** AeroFlux is explicitly *not* a replacement for certified
+collision-avoidance (ACAS/ATAS), air traffic control, or pilot tools. It is a
+higher-level, pre-tactical **fusion, simulation, and decision-support layer**
+that complements them — turning operations from reactive to anticipatory rather
+than intervening in the tactical safety loop.
 
 ## Technical Challenges
 

@@ -193,10 +193,13 @@ div.csl-indent {
   <li><a href="#abstract" id="toc-abstract" class="nav-link active" data-scroll-target="#abstract">Abstract</a></li>
   <li><a href="#introduction" id="toc-introduction" class="nav-link" data-scroll-target="#introduction"><span class="header-section-number">1</span> Introduction</a>
   <ul class="collapse">
-  <li><a href="#problem-statement" id="toc-problem-statement" class="nav-link" data-scroll-target="#problem-statement"><span class="header-section-number">1.1</span> Problem Statement</a></li>
-  <li><a href="#sec-contribution" id="toc-sec-contribution" class="nav-link" data-scroll-target="#sec-contribution"><span class="header-section-number">1.2</span> Contribution</a></li>
-  <li><a href="#scope" id="toc-scope" class="nav-link" data-scroll-target="#scope"><span class="header-section-number">1.3</span> Scope</a></li>
-  <li><a href="#technical-challenges" id="toc-technical-challenges" class="nav-link" data-scroll-target="#technical-challenges"><span class="header-section-number">1.4</span> Technical Challenges</a></li>
+  <li><a href="#problem-statement" id="toc-problem-statement" class="nav-link" data-scroll-target="#problem-statement"><span class="header-section-number">1.1</span> Problem Statement</a>
+  <ul class="collapse">
+  <li><a href="#the-problem-cascading-failure-in-tightly-coupled-systems" id="toc-the-problem-cascading-failure-in-tightly-coupled-systems" class="nav-link" data-scroll-target="#the-problem-cascading-failure-in-tightly-coupled-systems"><span class="header-section-number">1.1.1</span> The Problem: Cascading Failure in Tightly-Coupled Systems</a></li>
+  <li><a href="#contribution" id="toc-contribution" class="nav-link" data-scroll-target="#contribution"><span class="header-section-number">1.1.2</span> Contribution</a></li>
+  <li><a href="#scope-and-vision" id="toc-scope-and-vision" class="nav-link" data-scroll-target="#scope-and-vision"><span class="header-section-number">1.1.3</span> Scope and Vision</a></li>
+  </ul></li>
+  <li><a href="#technical-challenges" id="toc-technical-challenges" class="nav-link" data-scroll-target="#technical-challenges"><span class="header-section-number">1.2</span> Technical Challenges</a></li>
   </ul></li>
   <li><a href="#related-work" id="toc-related-work" class="nav-link" data-scroll-target="#related-work"><span class="header-section-number">2</span> Related Work</a></li>
   <li><a href="#data-and-fusion" id="toc-data-and-fusion" class="nav-link" data-scroll-target="#data-and-fusion"><span class="header-section-number">3</span> Data and Fusion</a>
@@ -307,34 +310,26 @@ modeling of cascading state in a tightly-coupled physical system. -->
 <p>Although airlines, airports, and air traffic authorities increasingly use real-time and predictive decision-support systems, these capabilities are often specialized around particular organizations, operational domains, or stages of flight. For example, the FAA’s Traffic Flow Management System supports demand-and-capacity management across the National Airspace System, while Terminal Flight Data Manager integrates surface and national traffic-management data to improve airport operations <span class="citation" data-cites="faa_nextgen_2024 faa_tfdm_2020">(<a href="#ref-faa_tfdm_2020" role="doc-biblioref">Federal Aviation Administration, 2020</a>, <a href="#ref-faa_nextgen_2024" role="doc-biblioref">2024c</a>)</span>. Commercial platforms such as Sabre Mosaic support airline disruption recovery, and Assaia ApronAI uses computer vision and machine learning to monitor aircraft turnarounds and predict departure readiness <span class="citation" data-cites="sabre_disruption_management assaia_apronai">(<a href="#ref-assaia_apronai" role="doc-biblioref">Assaia International AG, n.d.</a>; <a href="#ref-sabre_disruption_management" role="doc-biblioref">Sabre Corporation, n.d.</a>)</span>. Opportunities therefore remain for integrated research platforms that fuse multiple live aviation data streams, model delay propagation across the broader flight network, and support forecasting, simulation, data science, and AI-assisted analysis.</p>
 <section id="problem-statement" class="level2" data-number="1.1">
 <h2 data-number="1.1" class="anchored" data-anchor-id="problem-statement"><span class="header-section-number">1.1</span> Problem Statement</h2>
-<!-- TODO: State the specific problem this project solves, in your own framing.
-The one to sharpen: it's NOT "predict flight delays" (well-trodden). It's
-"perceive cascading state in a tightly-coupled physical system in real time,
-anticipate propagation, and support action before the window closes — with
-flight delay as the proof-of-concept." Keep it 1-2 paragraphs. This is the
-paragraph that tells the reader why the project is more than a delay model. -->
-<p><em>TODO: problem statement.</em></p>
+<section id="the-problem-cascading-failure-in-tightly-coupled-systems" class="level3" data-number="1.1.1">
+<h3 data-number="1.1.1" class="anchored" data-anchor-id="the-problem-cascading-failure-in-tightly-coupled-systems"><span class="header-section-number">1.1.1</span> The Problem: Cascading Failure in Tightly-Coupled Systems</h3>
+<p>A <strong>flight delay</strong> — an arrival later than scheduled, conventionally by 15 or more minutes — is rarely an isolated event. Aircraft fly sequential legs, so a late inbound flight delays its own next departure (<strong>rotational propagation</strong>); airports have finite runway and gate capacity, so congestion at one flight’s origin ripples to every flight sharing that resource (<strong>queue propagation</strong>). Through these mechanisms, a single local disturbance becomes a network-wide disruption. This is <strong>delay propagation</strong>, and it matters operationally because the window to act on a disruption closes as it spreads — by the time a cascade is visible in aggregate, the cheapest interventions are already gone.</p>
+<p>Compounding this, live operational data arrives as <strong>heterogeneous, imperfect streams</strong> — FAA SWIM flight messages, ADS-B aircraft positions, weather observations — that share no universal key and are measured differently from the historical records used to train models (<strong>distribution shift</strong>). Fusing these into a single, queryable operational view requires backward-looking temporal joins, UTC normalization, spatial matching, and entity resolution across systems that don’t agree on identity. This is the same class of real-time, multi-sensor data-fusion problem now central to edge AI, autonomy, and robotics: large, fast, noisy signals that must be fused and reasoned over in real time.</p>
 </section>
-<section id="sec-contribution" class="level2" data-number="1.2">
-<h2 data-number="1.2" class="anchored" data-anchor-id="sec-contribution"><span class="header-section-number">1.2</span> Contribution</h2>
-<!-- TODO: THE most important section for novelty. Argue what AeroFlux
-contributes BEYOND flight-delay prediction. Anchor on:
- - Propagation-aware modeling of cascading state (rotation as one nullable
-   channel over an always-available demand/weather/schedule backbone).
- - The Swiss Cheese Model (Reason) framing — seeing the holes align in time to act.
- - Generalization toward cyber-physical intelligence (sensors, robotics,
-   multi-domain propagation) — flight delay is the instance, not the point.
- - The engineering contribution: train/serve parity by construction, a portable
-   local<->cloud platform, honest live evaluation of a streaming predictor.
-State clearly what is genuinely new vs. what is standard. -->
-<p><em>TODO: contribution — the “why should anyone care” argument.</em></p>
+<section id="contribution" class="level3" data-number="1.1.2">
+<h3 data-number="1.1.2" class="anchored" data-anchor-id="contribution"><span class="header-section-number">1.1.2</span> Contribution</h3>
+<p>Complex systems fail when disruptions propagate faster than their defenses can adapt. Reason’s Swiss Cheese model frames accidents as the momentary alignment of holes across successive layers of defense — but the classic model is static. It names the holes; it does not show which are aligning, or how fast. In a live, tightly-coupled system, the holes are <em>moving</em>.</p>
+<p>AeroFlux’s contribution is a <strong>dynamic defensive layer</strong>: one that fuses live signals to see the holes forming, predicts their alignment, and gives operators time to act. Concretely, this means (1) real-time fusion of heterogeneous aviation and weather streams into a canonical, propagation-aware per-flight state; (2) predictive modeling of emerging delay risk with the network context (rotation, demand, weather) that drives propagation; and (3) an explainable analyst layer that makes those predictions inspectable in natural language.</p>
+<p>We use the U.S. National Airspace System as a <strong>proving ground</strong>. Flight delay was chosen deliberately — not because it is unsolved, but because it is well-studied, has abundant public ground truth, and keeps prediction errors low-stakes, giving rapid feedback for developing and validating methods. The delay problem is the instance; the contribution is the <em>approach</em> — a real-time, network-aware intelligence layer for anticipating cascading consequences in tightly-coupled systems — which is designed to extend to other safety-critical cyber-physical domains.</p>
 </section>
-<section id="scope" class="level2" data-number="1.3">
-<h2 data-number="1.3" class="anchored" data-anchor-id="scope"><span class="header-section-number">1.3</span> Scope</h2>
-<p>The long-term vision for AeroFlux is ambitious and continues to evolve. This project focuses on building a scalable, modular, configurable, portable, and decoupled big-data platform that can ingest, fuse, process, and analyze aviation and weather data in real time, establishing the technical foundation for future AeroFlux capabilities. Flight-delay prediction serves as the primary use case, but the architecture is designed to support additional applications, including congestion analysis, delay-propagation modeling, operational monitoring, decision support, and agentic AI. Stage 1 established a historical machine-learning pipeline and interactive prototype <span class="citation" data-cites="wilson2026flightdelay">(<a href="#ref-wilson2026flightdelay" role="doc-biblioref">Wilson et al., 2026</a>)</span>; this work extends that with a live data platform, baseline-vs-advanced model comparison, cloud deployment, live-prediction evaluation, and an explainable analyst agent prototype.</p>
+<section id="scope-and-vision" class="level3" data-number="1.1.3">
+<h3 data-number="1.1.3" class="anchored" data-anchor-id="scope-and-vision"><span class="header-section-number">1.1.3</span> Scope and Vision</h3>
+<p>This stage focused primarily on building the <strong>infrastructure</strong> such a layer requires: portable real-time ingestion and fusion, a train/serve-consistent feature pipeline, cloud-backed serving, live evaluation, and an explainable agent. It is foundation, not final form.</p>
+<p>The longer-term vision is cyber-physical situational awareness for complex adaptive systems — emphasizing data fusion, propagation modeling, downstream- effect reasoning, and decision intelligence. Natural next directions include network-aware simulation, an operational digital twin of the airspace, and agentic reasoning over fused state; further out, the same fusion-and-propagation core could extend beyond aviation toward a multi-domain autonomy and decision-support layer. We hold these directions as directions, not commitments — broad, foundational work of this kind is most valuable when it leaves room for the solution space to reveal where it should go next.</p>
+<p><strong>Positioning.</strong> AeroFlux is explicitly <em>not</em> a replacement for certified collision-avoidance (ACAS/ATAS), air traffic control, or pilot tools. It is a higher-level, pre-tactical <strong>fusion, simulation, and decision-support layer</strong> that complements them — turning operations from reactive to anticipatory rather than intervening in the tactical safety loop.</p>
 </section>
-<section id="technical-challenges" class="level2" data-number="1.4">
-<h2 data-number="1.4" class="anchored" data-anchor-id="technical-challenges"><span class="header-section-number">1.4</span> Technical Challenges</h2>
+</section>
+<section id="technical-challenges" class="level2" data-number="1.2">
+<h2 data-number="1.2" class="anchored" data-anchor-id="technical-challenges"><span class="header-section-number">1.2</span> Technical Challenges</h2>
 <p>Building this platform requires solving several non-trivial problems: (1) ingesting heterogeneous, error-prone streaming sources (FAA SWIM XML, ADS-B, weather) without data loss; (2) <em>entity resolution</em> across systems that share no universal key — for example, the aircraft tail number is not published in SWIM flight data and must be recovered from ADS-B, which itself has limited coverage; (3) unstable identifiers, since a flight’s <code>flight_ref</code> changes on plan amendment while its Globally Unique Flight Identifier (GUFI) remains stable; (4) train/serve skew, because historical labels (Bureau of Transportation Statistics) and live features are measured differently; and (5) delivering all of this at demo quality on a portable, low-cost footprint.</p>
 <!-- TODO: optionally add a sentence noting which of these were solved, partially
 solved, or remain open — forward-references the Limitations section. -->
@@ -892,9 +887,6 @@ Shelke, A. J., Shelke, R. J., Kamerkar, Y. M., &amp; Hazarani, N. P. (2026). <em
 </div>
 <div id="ref-sternberg2017review" class="csl-entry" role="listitem">
 Sternberg, A., Soares, J., Carvalho, D., &amp; Ogasawara, E. (2017). <em>A review on flight delay prediction</em>. <a href="https://arxiv.org/abs/1703.06118">https://arxiv.org/abs/1703.06118</a>
-</div>
-<div id="ref-wilson2026flightdelay" class="csl-entry" role="listitem">
-Wilson, J., Nindra, K., Austin, I., &amp; Sokolow, V. (2026). <em>From prediction to digital twin: A propagation-aware machine learning framework for flight delay modeling</em>. <a href="https://jonathanwilsonami.github.io/OR568_ML_Project/">https://jonathanwilsonami.github.io/OR568_ML_Project/</a>
 </div>
 <div id="ref-wong2012survival" class="csl-entry" role="listitem">
 Wong, J.-T., &amp; Tsai, S.-C. (2012). A survival model for flight delay propagation. <em>Journal of Air Transport Management</em>, <em>23</em>, 5–11.
