@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import random
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -234,6 +235,119 @@ def _try_predictions_backend(df: pd.DataFrame) -> pd.Series:
         except Exception:
             pass
     return pd.Series([0.25] * len(df), index=df.index)
+
+
+# --- Live Overview section (app.py) ----------------------------------------
+# All four functions below read from load_flights() -- the same cached, full
+# (unfiltered by current_flights()) tracked population the existing KPI row
+# and charts already use -- or from the local out/predictions/ snapshot
+# directory (never the cloud). Nothing here adds a new backend call; each
+# just wraps already-cached/local data in its own ttl=600 cache so repeated
+# reruns/widget interactions don't repeat the groupby/histogram work.
+RISK_TIER_BOUNDS = (0.3, 0.6)  # <0.3 Low, 0.3-0.6 Medium, >=0.6 High
+RISK_TIER_COLORS = {"Low": "#22c55e", "Medium": "#f59e0b", "High": "#ef4444"}
+
+
+def _risk_tier(prob: pd.Series) -> pd.Series:
+    lo, hi = RISK_TIER_BOUNDS
+    return pd.cut(prob.fillna(0.25), bins=[-0.01, lo, hi, 1.01],
+                  labels=["Low", "Medium", "High"])
+
+
+@st.cache_data(ttl=600)
+def live_overview_metrics() -> dict:
+    """Big-number cards for the Live Overview section -- same underlying
+    population as kpis() (full tracked set, not current_flights()'s active
+    subset), just this section's own 600s cadence and a percentage instead
+    of a raw at-risk count."""
+    df = load_flights()
+    total = len(df)
+    active = int((df["flight_status"] == "ACTIVE").sum()) if "flight_status" in df else 0
+    prob = df["delay_prob"] if "delay_prob" in df and total else pd.Series(dtype=float)
+    high = int((_risk_tier(prob) == "High").sum()) if len(prob) else 0
+    return {
+        "total": total,
+        "active": active,
+        "pct_high_risk": (high / total * 100) if total else 0.0,
+        "avg_prob": float(prob.mean()) if len(prob) else 0.0,
+    }
+
+
+@st.cache_data(ttl=600)
+def carrier_risk_breakdown(top_n: int = 15) -> pd.DataFrame:
+    """Top-N carriers by flight count, broken down by risk tier -- for the
+    stacked horizontal bar. Empty DataFrame (never an exception) if there's
+    no data yet."""
+    df = load_flights()
+    if df.empty or "carrier_name" not in df or "delay_prob" not in df:
+        return pd.DataFrame(columns=["carrier_name", "risk_tier", "flights"])
+    d = df.copy()
+    d["carrier_name"] = d["carrier_name"].fillna("Unknown")
+    d["risk_tier"] = _risk_tier(d["delay_prob"])
+    top = d["carrier_name"].value_counts().head(top_n).index
+    d = d[d["carrier_name"].isin(top)]
+    return (d.groupby(["carrier_name", "risk_tier"], observed=True)
+             .size().reset_index(name="flights"))
+
+
+@st.cache_data(ttl=600)
+def risk_distribution() -> pd.Series:
+    """delay_prob across the full tracked population, for the risk histogram."""
+    df = load_flights()
+    if df.empty or "delay_prob" not in df:
+        return pd.Series(dtype=float)
+    return df["delay_prob"].dropna()
+
+
+# Same resolution _GOLD_LIVE_DIR uses in pages/4_Model_Performance.py, applied
+# to the sibling "predictions" snapshot dir instead of "gold_live" -- see that
+# page's _OUT_DIR comment. out/predictions/ (score_live.py's
+# _maybe_write_snapshot, ~hourly) is the directory that actually carries
+# delay_probability + scored_at; out/gold_live/ (e2e.sh's cmd_archive) is raw
+# gold features only, no prediction columns at all -- confirmed against a
+# real snapshot file on disk. Both are local-filesystem only (sync_cloud.py
+# never syncs either to S3), so reading this one instead adds no cloud cost.
+_PREDICTIONS_SNAPSHOT_DIR = (
+    Path(os.getenv("AEROFLUX_PREDICTIONS", "out/predictions.parquet")).resolve().parent
+    / "predictions"
+)
+
+
+@st.cache_data(ttl=600)
+def live_overview_timeseries(hours: int = 24) -> pd.DataFrame:
+    """Average delay probability + flight count per hour, over the last
+    `hours` hours, from the local out/predictions/*.parquet snapshots.
+    Empty DataFrame (never an exception) if the directory or any in-window
+    snapshots don't exist yet."""
+    empty = pd.DataFrame(columns=["hour", "avg_delay_prob", "flight_count"])
+    if not _PREDICTIONS_SNAPSHOT_DIR.exists():
+        return empty
+    files = sorted(_PREDICTIONS_SNAPSHOT_DIR.glob("predictions_*.parquet"))
+    if not files:
+        return empty
+    cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=hours)
+    # Filenames are predictions_YYYYMMDD_HH[MM].parquet, lexicographically
+    # sortable -- files[-(hours+2):] is a cheap pre-filter before the real
+    # scored_at cutoff below (throttled to ~1/hour, so this is generous).
+    frames = []
+    for f in files[-(hours + 2):]:
+        try:
+            frames.append(pd.read_parquet(f, columns=["flight_key", "delay_probability", "scored_at"]))
+        except Exception:
+            continue
+    if not frames:
+        return empty
+    d = pd.concat(frames, ignore_index=True)
+    d["scored_at"] = pd.to_datetime(d["scored_at"], utc=True, errors="coerce")
+    d = d[d["scored_at"] >= cutoff]
+    if d.empty:
+        return empty
+    d["hour"] = d["scored_at"].dt.floor("h")
+    out = (d.groupby("hour")
+             .agg(avg_delay_prob=("delay_probability", "mean"),
+                  flight_count=("flight_key", "nunique"))
+             .reset_index().sort_values("hour"))
+    return out
 
 
 @functools.lru_cache(maxsize=1)
