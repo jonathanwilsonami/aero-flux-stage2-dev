@@ -69,42 +69,12 @@ through a `StateRepository`/`LakeStore` abstraction
 use) or `dynamodb`/`s3` (what the deployed app uses). The whole pipeline is
 container-first so it runs the same on a laptop and in the cloud.
 
-## Demo Videos
+## AeroFlux Demo
 
-Walkthroughs showcasing each part of the AeroFlux app.
+Video walkthroughs of the AeroFlux application, including the live flight map,
+network overview, model performance, and Aviation Analyst Agent:
 
-### Live Flight Map & Network Overview
-
-<video
-    autoplay
-    loop
-    muted
-    controls
-    playsinline
-    style="width: 100%; max-width: 1200px;"
->
-    <source src="assets/videos/test.mp4" type="video/mp4">
-</video>
-
-_Walkthrough of the live flight map, the real-time network overview panels
-(flights tracked, carrier breakdown, delay-risk distribution), and how live
-data updates as flights move through the system._
-
-### Model Performance Page
-
-https://github.com/jonathanwilsonami/aero-flux-stage2-dev/assets/<your-video-url>
-
-_The model performance page — predictive metrics, feature importances, the
-lag-bucketed live evaluation, and the structural-coverage caveat on live
-outcome data._
-
-### Analyst Agent
-
-https://github.com/jonathanwilsonami/aero-flux-stage2-dev/assets/<your-video-url>
-
-_The Aviation Analyst Agent answering live flight questions — pulling real
-predictions, explaining delay risk through model features, and citing its
-sources._
+**[View the AeroFlux Demo →](https://jonathanwilsonami.github.io/aero-flux-stage2-dev/aeroflux-demo.html)**
 
 ## Sample input and output
 
