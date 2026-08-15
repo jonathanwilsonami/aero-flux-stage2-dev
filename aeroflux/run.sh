@@ -3,7 +3,10 @@
 # streaming mode that keeps silver/gold fresh with a rolling 48h of raw data.
 #
 #   ./run.sh setup             # one-time: infra up (Kafka+Postgres), topic, tables
-#   ./run.sh stream 3600       # REAL-TIME: bridge+consumer+poller + refresh loop
+#   ./run.sh stream             # REAL-TIME: self-supervised bridge+consumer+poller
+#                               #   + independent pipeline-refresh loop (optionally
+#                               #   ./run.sh stream 3600 to override the bridge's
+#                               #   recycle safety-valve, default INGEST_SECONDS=8h)
 #   ./run.sh pipeline          # one-shot: raw -> silver -> load -> gold (+weather)
 #   ./run.sh retention         # purge raw + adsb store older than 48h
 #   ./run.sh sync              # export gold/silver to STORAGE_DEST (local or s3://)
@@ -44,8 +47,34 @@ COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml}"
 TOPIC="${KAFKA_TOPIC:-swim.raw.flight}"
 RAW_TABLE="${RAW_TABLE:-swim.raw_messages}"; RAW_COLUMN="${RAW_COLUMN:-raw_xml}"
 LIMIT="${LIMIT:-500000}"; LIVE="${LIVE:-100}"; OUT="${OUT:-$ROOT/out}"
-INGEST_SECONDS="${INGEST_SECONDS:-3600}"
+# Recycle interval for the underlying SWIM bridge process -- a safety
+# valve (memory/connection hygiene over very long runs), NOT the
+# supervision mechanism (see cmd_stream): that's fully reactive now
+# (PID + heartbeat), so this no longer needs to be short. Was 3600 (1h),
+# purely because periodic recycling used to be the ONLY way anything
+# noticed the bridge needed a fresh connection. swim_to_kafka.py's own
+# in-process reconnect loop already treats any connection loss (network
+# blip, or a hypothetical FAA-side session close) as retriable and
+# recovers without a process restart -- see tests/test_swim_reconnect.py
+# and the 2026-08-11 incident that added it. Nothing in this codebase or
+# Solace's basic-auth (no expiring token) points to a hard session-
+# lifetime cap, but there's also no precedent yet of an actually-uncapped
+# multi-hour session (every run before this fix was externally cut short
+# around 3600s by this exact value) -- so this stays a generous cap, not
+# zero, until that's been observed live. 28800s = 8h.
+INGEST_SECONDS="${INGEST_SECONDS:-28800}"
 REFRESH_SECONDS="${REFRESH_SECONDS:-300}"
+# How often cmd_stream's bridge-supervisor loop polls real state (PID +
+# heartbeat) -- independent of REFRESH_SECONDS (pipeline refresh) on
+# purpose, see cmd_stream's comment.
+INGEST_POLL_SECONDS="${INGEST_POLL_SECONDS:-10}"
+# Same name/meaning as e2e.sh cmd_health's INGEST_STALE_MINUTES (minutes
+# of silence = dead) -- there it's a human-facing report; here the same
+# signal is acted on automatically via the heartbeat file.
+INGEST_STALE_MINUTES="${INGEST_STALE_MINUTES:-5}"
+INGEST_BACKOFF_BASE_SECONDS="${INGEST_BACKOFF_BASE_SECONDS:-5}"
+INGEST_BACKOFF_MAX_SECONDS="${INGEST_BACKOFF_MAX_SECONDS:-60}"
+INGEST_HEARTBEAT_FILE="${INGEST_HEARTBEAT_FILE:-$OUT/.ingest_heartbeat}"
 RETENTION_HOURS="${RETENTION_HOURS:-48}"
 WEATHER="${WEATHER:-1}"
 STORAGE_DEST="${STORAGE_DEST:-}"
@@ -96,12 +125,25 @@ CREATE TABLE IF NOT EXISTS flight_instance (
   updated_at timestamptz DEFAULT now()
 );
 SQL
-  log "Setup complete. Real-time: ./run.sh stream 3600  |  one-shot: ./run.sh pipeline"
+  log "Setup complete. Real-time: ./run.sh stream  |  one-shot: ./run.sh pipeline"
 }
 
 cmd_consume(){ resolve_containers; nohup python kafka_to_postgres.py > kafka_to_postgres.log 2>&1 & echo "consumer started (PID $!, kafka_to_postgres.log)"; }
 cmd_adsb(){ resolve_containers; nohup python adsb_poller.py > adsb_poller.log 2>&1 & echo "adsb poller started (PID $!, adsb_poller.log)"; }
-cmd_ingest(){ local s="${1:-$INGEST_SECONDS}"; nohup python swim_to_kafka.py --duration "$s" > swim_to_kafka.log 2>&1 & echo "bridge started ${s}s (PID $!, swim_to_kafka.log)"; }
+cmd_ingest(){
+  local s="${1:-$INGEST_SECONDS}"
+  # INGEST_HEARTBEAT_FILE scoped to just this command (bash's inline-
+  # assignment-before-command idiom, same as e2e.sh cmd_sync_cloud's
+  # `GOLD="$GOLD" ... "$ROOT/scripts/sync_cloud.sh"`) -- swim_to_kafka.py
+  # reads it directly (no dotenv round-trip needed), no-ops if unset.
+  INGEST_HEARTBEAT_FILE="$INGEST_HEARTBEAT_FILE" \
+    nohup python swim_to_kafka.py --duration "$s" > swim_to_kafka.log 2>&1 &
+  # Not `local` on purpose -- cmd_stream reads this right after calling
+  # cmd_ingest, to supervise the bridge's actual liveness rather than just
+  # assuming it survives for the full $s window (see cmd_stream's comment).
+  INGEST_BRIDGE_PID=$!
+  echo "bridge started ${s}s safety-valve (PID $INGEST_BRIDGE_PID, swim_to_kafka.log)"
+}
 
 cmd_pipeline(){
   resolve_containers
@@ -146,19 +188,108 @@ cmd_sync(){
 }
 
 cmd_stream(){
-  local s="${1:-86400}"
+  local s="${1:-$INGEST_SECONDS}"
   cmd_setup
-  log "REAL-TIME mode: bridge + consumer + poller, refreshing every ${REFRESH_SECONDS}s"
+  log "REAL-TIME mode: bridge (self-supervised) + consumer + poller, pipeline refresh every ${REFRESH_SECONDS}s"
   cmd_consume; cmd_adsb; cmd_ingest "$s"
-  trap 'echo; log "stopping stream"; cmd_stop; exit 0' INT TERM
-  local elapsed=0
-  while [ "$elapsed" -lt "$s" ]; do
-    sleep "$REFRESH_SECONDS"; elapsed=$((elapsed + REFRESH_SECONDS))
-    cmd_pipeline || log "pipeline refresh hiccup (continuing)"
-    cmd_retention || true
-    cmd_status || true
+
+  # Pipeline refresh is its OWN independent loop now, not interleaved with
+  # bridge supervision below in one shared loop body. This is the actual
+  # fix for the 2026-08-15 drift bug: cmd_pipeline's build_dataset.py takes
+  # real minutes once raw_messages is in the millions, and none of that
+  # time used to count toward the old loop's single "elapsed" bookkeeping
+  # -- so a slow refresh could silently starve the bridge-liveness check
+  # for hours. Two independent loops, sharing no timing state, can't do
+  # that to each other again by construction, not by remembering to be
+  # careful with one shared counter.
+  ( while :; do
+      sleep "$REFRESH_SECONDS"
+      cmd_pipeline || log "pipeline refresh hiccup (continuing)"
+      cmd_retention || true
+      cmd_status || true
+    done ) & local pipeline_loop_pid=$!
+
+  _stream_cleanup(){
+    kill "$pipeline_loop_pid" 2>/dev/null || true
+    cmd_stop
+  }
+  trap 'echo; log "stopping stream"; _stream_cleanup; exit 0' INT TERM
+
+  local fail_count=0 last_launch_ts; last_launch_ts=$(date +%s)
+  while :; do
+    # Orphan self-check: SUPERVISOR_PID is exported by e2e.sh's cmd_ingest
+    # to its own PID before it calls `./run.sh stream`. If that process is
+    # gone, nothing will EVER relaunch this one when it eventually dies --
+    # self-terminate now rather than run un-supervised. Confirmed live
+    # 2026-08-15: an orphaned `run.sh stream` from an already-exited
+    # `e2e.sh ingest` sat running for hours with no supervisor left at
+    # all, racing a fresh replacement on flight_instance's TRUNCATE
+    # window. Skipped when SUPERVISOR_PID isn't set -- a person running
+    # `./run.sh stream` directly IS the top-level entity; INT/TERM above
+    # already covers that case.
+    if [ -n "${SUPERVISOR_PID:-}" ] && ! kill -0 "$SUPERVISOR_PID" 2>/dev/null; then
+      log "supervisor (PID $SUPERVISOR_PID) is gone -- this run.sh stream is orphaned, stopping"
+      _stream_cleanup
+      exit 0
+    fi
+
+    # Bridge liveness -- real observable state, not a timer. Two checks:
+    # (a) is the PID even alive (covers a clean --duration/--max-messages
+    #     exit, logged "Stopped after publishing N message(s)", AND any
+    #     crash -- swim_to_kafka.py's own reconnect loop only covers
+    #     in-process exceptions, not the process dying outright);
+    # (b) if alive, has its heartbeat file gone stale (covers a wedged
+    #     receiver call that never raises, so (a) alone would never
+    #     trip -- nothing before this could detect that case at all).
+    # Skip the heartbeat check for the first INGEST_STALE_MINUTES*60/2
+    # (min 60s) after any launch -- otherwise a heartbeat file left over
+    # from a PREVIOUS bridge instance can look "stale" for the few
+    # seconds a fresh one needs to actually connect, causing an
+    # immediate false-positive relaunch loop.
+    local need_relaunch=0 reason=""
+    if ! kill -0 "$INGEST_BRIDGE_PID" 2>/dev/null; then
+      need_relaunch=1; reason="exited"
+    else
+      local since_launch=$(( $(date +%s) - last_launch_ts ))
+      local grace=$(( INGEST_STALE_MINUTES * 30 )); [ "$grace" -lt 60 ] && grace=60
+      if [ "$since_launch" -gt "$grace" ] && [ -f "$INGEST_HEARTBEAT_FILE" ]; then
+        local hb_age=$(( $(date +%s) - $(stat -c %Y "$INGEST_HEARTBEAT_FILE" 2>/dev/null || echo 0) ))
+        if [ "$hb_age" -gt $(( INGEST_STALE_MINUTES * 60 )) ]; then
+          need_relaunch=1; reason="stalled (no heartbeat in ${hb_age}s)"
+          log "SWIM bridge (PID $INGEST_BRIDGE_PID) $reason -- terminating it"
+          kill "$INGEST_BRIDGE_PID" 2>/dev/null || true
+          sleep 2
+          kill -9 "$INGEST_BRIDGE_PID" 2>/dev/null || true
+        fi
+      fi
+    fi
+
+    if [ "$need_relaunch" = "1" ]; then
+      # Bounded backoff, but only for RAPID repeat failures (< 30s alive)
+      # -- a clean recycle after a full healthy 8h session must relaunch
+      # immediately, same as today; only a crash-loop (e.g. the 2026-08-14
+      # .env incident) should ever slow down. Mirrors the shape of
+      # swim_to_kafka.py's own in-process backoff (2s doubling to 60s),
+      # one layer up.
+      local now; now=$(date +%s)
+      if [ $(( now - last_launch_ts )) -lt 30 ]; then
+        fail_count=$((fail_count + 1))
+      else
+        fail_count=0
+      fi
+      local backoff=$INGEST_BACKOFF_BASE_SECONDS i=1
+      while [ "$i" -lt "$fail_count" ] && [ "$backoff" -lt "$INGEST_BACKOFF_MAX_SECONDS" ]; do
+        backoff=$((backoff * 2)); i=$((i + 1))
+      done
+      [ "$backoff" -gt "$INGEST_BACKOFF_MAX_SECONDS" ] && backoff=$INGEST_BACKOFF_MAX_SECONDS
+      log "SWIM bridge $reason -- relaunching (fail streak: $fail_count$( [ "$fail_count" -gt 0 ] && echo ", backoff ${backoff}s" ))"
+      [ "$fail_count" -gt 0 ] && sleep "$backoff"
+      cmd_ingest "$s"
+      last_launch_ts=$(date +%s)
+    fi
+
+    sleep "$INGEST_POLL_SECONDS"
   done
-  cmd_stop
 }
 
 cmd_all(){ local s="${1:-$INGEST_SECONDS}"; cmd_setup; cmd_consume; cmd_adsb; cmd_ingest "$s"; log "Collecting ${s}s..."; sleep "$s"; cmd_pipeline; }

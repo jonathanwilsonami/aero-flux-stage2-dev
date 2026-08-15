@@ -38,6 +38,32 @@ STOP_REQUESTED = False
 RECONNECT_BACKOFF_BASE_S = 2.0
 RECONNECT_BACKOFF_MAX_S = 60.0
 
+# Heartbeat file: an external supervisor (run.sh's cmd_stream) polls this
+# file's mtime to tell "bridge is alive AND actually receiving" apart from
+# "bridge process is alive but wedged" (a hung receiver call that never
+# raises, so the in-process reconnect loop below never sees it either) --
+# the one failure mode nothing before this could detect. Opt-in: only
+# writes if INGEST_HEARTBEAT_FILE is set, so direct/manual/test runs that
+# don't set it see zero behavior change.
+_HEARTBEAT_MIN_INTERVAL_S = 5.0
+_last_heartbeat_write = 0.0
+
+
+def _touch_heartbeat(published: int, *, force: bool = False) -> None:
+    global _last_heartbeat_write
+    path = os.getenv("INGEST_HEARTBEAT_FILE", "").strip()
+    if not path:
+        return
+    now = time.monotonic()
+    if not force and now - _last_heartbeat_write < _HEARTBEAT_MIN_INTERVAL_S:
+        return  # throttled -- avoid a disk write per message at high rates
+    try:
+        with open(path, "w") as fh:
+            fh.write(f"{utc_now()} published={published}\n")
+        _last_heartbeat_write = now
+    except OSError:
+        log.debug("Could not write heartbeat file %s", path, exc_info=True)
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -206,6 +232,10 @@ def run_live(args: argparse.Namespace) -> None:
             receiver.start()
             log.info("Connected. Bridging queue %s -> Kafka topic %s", queue_name, topic)
             backoff = RECONNECT_BACKOFF_BASE_S  # a live connection resets the backoff
+            # Force (bypass throttle): a supervisor's stall check needs a
+            # fresh timestamp right at reconnect, not up to
+            # _HEARTBEAT_MIN_INTERVAL_S stale from before this connection.
+            _touch_heartbeat(published, force=True)
 
             while not STOP_REQUESTED and not _limits_reached(args, started_at, published):
                 message = receiver.receive_message(1000)
@@ -228,6 +258,7 @@ def run_live(args: argparse.Namespace) -> None:
                 # Acknowledge only after Kafka confirms the write.
                 receiver.ack(message)
                 published += 1
+                _touch_heartbeat(published)
                 log.info(
                     "Published message %d (%d bytes) to %s",
                     published,

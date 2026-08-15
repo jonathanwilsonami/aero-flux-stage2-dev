@@ -83,25 +83,52 @@ cmd_link(){
 }
 
 # ---- 2. INGEST (live pipeline via run.sh) ----------------------------------
-# Continuous mode relaunches `run.sh stream 3600` in a loop -- swim_to_kafka.py
-# is bounded to that same 3600s per session (a clean, deliberate completion,
-# not a crash), so this loop is what makes DURATION=continuous genuinely
-# continuous across those boundaries. A clean completion (rc=0, from
-# run.sh's own cmd_stop) relaunches IMMEDIATELY, no artificial delay. A
-# FAILING relaunch attempt (rc!=0 -- run.sh dying early for any reason, e.g.
-# the .env gotcha in run.sh's own comment) gets a short backoff first --
-# found for real 2026-08-14: with zero backoff, a fast-failing run.sh
-# invocation turned into an hours-long silent busy-loop (millions of log
-# lines, ingest never actually running) instead of a visible, rate-limited
-# retry. Backoff is deliberately short (30s), not exponential -- this
-# should be rare now that run.sh's own .env sourcing is non-fatal (see its
-# comment), so a quick retry beats a slow one for the ordinary "real error,
-# fixed within a minute" case.
+# run.sh's own cmd_stream is now self-supervising (real PID + heartbeat
+# liveness, immediate reactive relaunch, bounded backoff -- see run.sh's
+# comments) -- under normal operation `./run.sh stream` just runs
+# indefinitely and this outer loop's body only executes ONCE. It still
+# wraps in `while true` as a last-resort safety net for the whole process
+# dying unexpectedly (e.g. OOM-killed) -- rare now, but a clean completion
+# (rc=0) still relaunches IMMEDIATELY, no artificial delay, and a FAILING
+# relaunch attempt (rc!=0) still gets a short flat backoff first -- found
+# for real 2026-08-14: with zero backoff, a fast-failing run.sh invocation
+# turned into an hours-long silent busy-loop (millions of log lines,
+# ingest never actually running) instead of a visible, rate-limited retry.
 cmd_ingest(){
+  # Single-instance guard (2026-08-15): standalone `./e2e.sh ingest` used
+  # to have NO check at all -- unlike cmd_up's _running_stage_pids guard,
+  # which only fires for whole-stack `up`. That gap is exactly how a
+  # 04:43 ingest and a fresh 07:22 restart ended up running concurrently,
+  # both periodically TRUNCATE-ing flight_instance. Same UX as cmd_up's
+  # guard: refuse by default, FORCE=1 to replace cleanly.
+  local existing; existing=$(cat "$ROOT/out/.ingest_pid" 2>/dev/null || true)
+  if [ -n "$existing" ] && kill -0 "$existing" 2>/dev/null; then
+    if [ "${FORCE:-0}" = "1" ]; then
+      log "FORCE=1 -- stopping existing ingest supervisor (pid $existing) before starting a new one"
+      kill "$existing" 2>/dev/null || true
+      # run.sh stream's own orphan self-check (SUPERVISOR_PID, below)
+      # notices this within one INGEST_POLL_SECONDS tick and tears itself
+      # down cleanly -- the actual fix for "kill on the outer pid doesn't
+      # cascade to the run.sh stream child" (2026-08-11 incident). Poll
+      # for real disappearance rather than assuming; ./run.sh stop is
+      # still called as a belt-and-suspenders fallback in case that
+      # self-check is itself somehow wedged.
+      local waited=0
+      while kill -0 "$existing" 2>/dev/null && [ "$waited" -lt 20 ]; do sleep 1; waited=$((waited + 1)); done
+      ./run.sh stop 2>/dev/null || true
+      kill -0 "$existing" 2>/dev/null && log "WARNING: pid $existing still alive after ${waited}s -- continuing anyway, check for a stuck process"
+    else
+      echo "ERROR: ingest is already running (pid $existing) -- refusing to start a second one." >&2
+      echo "Run ./e2e.sh down first, or re-run with FORCE=1 to replace it." >&2
+      exit 1
+    fi
+  fi
+
   log "starting live ingestion (duration=$DURATION) -> $LOGS/ingest.log"
   if [ "$DURATION" = "continuous" ]; then
-    ( while true; do
-        ./run.sh stream 3600 >>"$LOGS/ingest.log" 2>&1
+    ( export SUPERVISOR_PID="$BASHPID"  # run.sh stream's orphan self-check reads this
+      while true; do
+        ./run.sh stream "${INGEST_SESSION_SECONDS:-28800}" >>"$LOGS/ingest.log" 2>&1
         rc=$?
         if [ "$rc" -ne 0 ]; then
           echo "$(date +%H:%M:%S) | e2e | run.sh stream exited non-zero ($rc) -- backing off 30s before relaunch" >>"$LOGS/ingest.log"
@@ -109,7 +136,8 @@ cmd_ingest(){
         fi
       done ) & echo $! > "$ROOT/out/.ingest_pid"
   else
-    ( ./run.sh stream "$DURATION" >>"$LOGS/ingest.log" 2>&1 ) & echo $! > "$ROOT/out/.ingest_pid"
+    ( export SUPERVISOR_PID="$BASHPID"
+      ./run.sh stream "$DURATION" >>"$LOGS/ingest.log" 2>&1 ) & echo $! > "$ROOT/out/.ingest_pid"
   fi
   log "ingest pid $(cat "$ROOT/out/.ingest_pid")"
 }
