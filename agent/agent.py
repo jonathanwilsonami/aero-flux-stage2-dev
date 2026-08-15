@@ -22,11 +22,21 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 
-from tools import document_search, flight_query, model_inference, shap_explanation, event_reconstruction
+from tools import (document_search, flight_query, model_inference, shap_explanation,
+                    event_reconstruction, at_risk_flights)
 
 load_dotenv()
 
 FLIGHT_NUMBER_PATTERN = re.compile(r"\b[A-Z]{2}\d{2,4}\b")
+# Fleet-wide (no specific flight number) risk questions -- deterministically
+# prefetched below for the same reason per-flight data is: smaller models
+# are unreliable about remembering to call the right tool on their own (see
+# agent/EVALUATION.md issue #1), and this is a brand-new tool with no track
+# record yet.
+FLEET_RISK_KEYWORDS = (
+    "most at risk", "highest risk", "highest-risk", "at risk right now",
+    "at-risk", "which flights", "what flights are", "riskiest",
+)
 
 SYSTEM_PROMPT = """You are the AeroFlux Aviation Operations Analyst.
 
@@ -40,7 +50,20 @@ Rules you must follow:
    it directly in your answer. Do NOT say you lack real-time data when this
    data is present, and do NOT call flight_query_tool, model_inference_tool,
    shap_explanation_tool, or event_reconstruction_tool again for that
-   flight.
+   flight. Same for "Retrieved fleet-wide at-risk flight data" -- if present,
+   don't call at_risk_flights_tool again either.
+   Retrieved flight/fleet data has a "source" field: "live" means real
+   current AeroFlux data (DynamoDB/S3); "sample" means the demo dataset --
+   mention which one you're answering from if it's "sample", so nobody
+   mistakes a demo answer for a real one.
+   shap_explanation_tool's result is the model's REAL INPUT FEATURE VALUES
+   for that flight (propagation pressure, demand, weather, rotation) --
+   NOT computed SHAP contribution scores. Explain risk in terms of what
+   those feature values show (e.g. "the origin is seeing high departure
+   demand" or "the inbound aircraft's rotation couldn't be resolved"), but
+   never claim you computed or are reporting a SHAP value/importance score
+   -- you aren't and didn't. A feature absent from the result was
+   genuinely unresolved/unknown for that flight, not zero risk.
 2. Relevant document excerpts have ALREADY been retrieved and provided in
    a system message, each one prefixed with its bracketed source name,
    e.g. "[ground_delay_programs.txt] Ground Delay Programs slow...". Base
@@ -84,26 +107,46 @@ def document_search_tool(query: str) -> str:
 
 @tool
 def flight_query_tool(flight_number: str = "") -> str:
-    """Look up a flight's current canonical state by flight number (e.g. 'AA2033')."""
+    """Look up a flight's current canonical state (status, route, times, position)
+    and its delay prediction if scored, by flight number (e.g. 'AA2033'). Live
+    current data when available, otherwise the demo dataset -- check the
+    result's "source" field."""
     return json.dumps(flight_query(flight_number=flight_number or None))
 
 
 @tool
 def model_inference_tool(flight_number: str = "") -> str:
-    """Get the delay prediction (probability + minutes) for a flight by flight number."""
+    """Get the delay prediction (probability + predicted_delayed) for a flight
+    by flight number. Live current prediction when available, otherwise the
+    demo dataset -- check the result's "source" field."""
     return json.dumps(model_inference(flight_number=flight_number or None))
 
 
 @tool
 def shap_explanation_tool(flight_number: str = "") -> str:
-    """Get the top SHAP feature contributions explaining a flight's delay prediction."""
+    """Get the model's real input feature values behind a flight's delay
+    prediction (propagation pressure, demand, weather, rotation) -- these are
+    the actual data the model scored the flight on, NOT computed SHAP
+    contribution scores. Live when available, otherwise the demo dataset --
+    check the result's "source" field."""
     return json.dumps(shap_explanation(flight_number=flight_number or None))
 
 
 @tool
 def event_reconstruction_tool(flight_number: str = "") -> str:
-    """Get the recent event/state-change history for a flight."""
+    """Get the recent event/state-change history for a flight. Demo dataset
+    only -- no live equivalent exists yet."""
     return json.dumps(event_reconstruction(flight_number=flight_number or None))
+
+
+@tool
+def at_risk_flights_tool(limit: int = 10) -> str:
+    """Get the flights with the highest predicted delay probability right now,
+    across the whole live tracked fleet -- use this for "what/which flights
+    are most at risk" style questions that don't name a specific flight. Live
+    when available, otherwise ranked from the demo dataset -- check the
+    result's "source" field."""
+    return json.dumps(at_risk_flights(limit=limit))
 
 
 ALL_TOOLS = [
@@ -112,6 +155,7 @@ ALL_TOOLS = [
     model_inference_tool,
     shap_explanation_tool,
     event_reconstruction_tool,
+    at_risk_flights_tool,
 ]
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
@@ -167,7 +211,9 @@ def prefetch_node(state: AgentState) -> AgentState:
             )
         )
 
-    # Additionally fetch flight data if a flight number is mentioned.
+    # Additionally fetch flight data if a flight number is mentioned, or
+    # fleet-wide at-risk data if the question looks fleet-wide instead
+    # (mutually exclusive -- a specific flight number takes priority).
     match = FLIGHT_NUMBER_PATTERN.search(question.upper())
     if match:
         flight_number = match.group(0)
@@ -183,6 +229,17 @@ def prefetch_node(state: AgentState) -> AgentState:
                     f"Retrieved data for flight {flight_number} (already "
                     f"fetched -- use it directly, do not call the flight "
                     f"tools again for this flight):\n{json.dumps(data, indent=2)}"
+                )
+            )
+        )
+    elif any(kw in question.lower() for kw in FLEET_RISK_KEYWORDS):
+        top = at_risk_flights(limit=10)
+        new_messages.append(
+            SystemMessage(
+                content=(
+                    "Retrieved fleet-wide at-risk flight data (already fetched -- "
+                    "use it directly, do not call at_risk_flights_tool again):\n"
+                    f"{json.dumps(top, indent=2)}"
                 )
             )
         )
