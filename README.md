@@ -1,9 +1,8 @@
 # AeroFlux
 
-**Real-time flight-delay prediction over FAA SWIM + ADS-B + weather, with
-train/serve parity by construction.**
+**Real-time flight-delay prediction over FAA SWIM + ADS-B + weather**
 
-🔗 **Live demo:** [aeroflux.duckdns.org](https://aeroflux.duckdns.org)
+**Live demo:** [aeroflux.duckdns.org](https://aeroflux.duckdns.org)
 
 ---
 
@@ -70,6 +69,36 @@ through a `StateRepository`/`LakeStore` abstraction
 use) or `dynamodb`/`s3` (what the deployed app uses). The whole pipeline is
 container-first so it runs the same on a laptop and in the cloud.
 
+## Demo Videos
+
+Walkthroughs showcasing each part of the AeroFlux app.
+
+### Live Flight Map & Network Overview
+
+<video autoplay loop muted controls width="100%">
+  <source src="assets/videos/test.mp4" type="video/mp4">
+</video>
+
+_Walkthrough of the live flight map, the real-time network overview panels
+(flights tracked, carrier breakdown, delay-risk distribution), and how live
+data updates as flights move through the system._
+
+### Model Performance Page
+
+https://github.com/jonathanwilsonami/aero-flux-stage2-dev/assets/<your-video-url>
+
+_The model performance page — predictive metrics, feature importances, the
+lag-bucketed live evaluation, and the structural-coverage caveat on live
+outcome data._
+
+### Analyst Agent
+
+https://github.com/jonathanwilsonami/aero-flux-stage2-dev/assets/<your-video-url>
+
+_The Aviation Analyst Agent answering live flight questions — pulling real
+predictions, explaining delay risk through model features, and citing its
+sources._
+
 ## Sample input and output
 
 **Input** — a raw FAA SWIM TFMS message (`fltdMessage`, abridged):
@@ -94,7 +123,7 @@ container-first so it runs the same on a laptop and in the cloud.
 ```
 
 **Fused into canonical silver state** (`flight_instance`, one row per
-flight — see `AeroFlux_DataSchemas.md` §1 for the full schema):
+flight — see `AeroFlux_DataSchemas.md` for the full schema):
 
 ```json
 {
@@ -112,7 +141,7 @@ flight — see `AeroFlux_DataSchemas.md` §1 for the full schema):
 ```
 
 **Scored into a prediction** (`predictions`, joined on `flight_key` =
-`flight_instance_id` — see `AeroFlux_DataSchemas.md` §2):
+`flight_instance_id` — see `AeroFlux_DataSchemas.md`):
 
 ```json
 {
@@ -127,23 +156,41 @@ flight — see `AeroFlux_DataSchemas.md` §1 for the full schema):
 
 ## Architecture
 
-![AeroFlux architecture diagram](images/design/aeroflux2-arch-v2.png)
+![AeroFlux architecture diagram](images/design/aeroflux-architecture-final.svg)
 
-*(Source draw.io file: `arch_diagrams/aeroflux_architecture-final.drawio` —
+*(Source draw.io file: `arch_diagrams/aeroflux-architecture-final.drawio` —
 exported PNG/SVG lands in `images/design/`.)*
+
+AeroFlux is a **hybrid on-prem + cloud** system. This split is deliberate. The streaming pipeline is compute- and data-intensive but doesn't need to be publicly hosted, so it runs where compute
+is cheap and controllable — on-prem. The serving layer needs to be always-on,
+publicly reachable, and low-maintenance, so it lives in the cloud on a small
+footprint, reading only a synced copy of the data. The two halves are decoupled
+by a config toggle: the same code runs fully local (Postgres, filesystem) or
+against cloud backends (S3, DynamoDB) with no changes, making the platform
+portable across a laptop, on-prem hardware, or any cloud VM.
 
 Left to right: **live sources** (SWIM, ADS-B, METAR/NCEI) feed a Kafka
 bridge into **bronze** (raw Postgres), which is fused into **silver**
 (canonical per-flight state, Postgres). In parallel, **historical BTS**
 data + cached weather feed the same feature contract for **training**. Both
 paths converge on **gold** (Parquet feature tables), which either trains the
-XGBoost model or gets scored by it live. A `sync_cloud.py` step pushes gold
-to **S3** and current state + predictions to **DynamoDB**; the deployed
-**Streamlit app** reads only from that cloud copy. The **local/cloud split**
-is the config toggle described above — everything left of `sync_cloud.py`
-runs on the local ingest machine regardless of backend; everything reading
-through `data_access.py` (the Streamlit app) is backend-aware and reads
-whichever store is configured.
+XGBoost model (with SparkML GBT as the distributed scale path) or gets scored
+by it live. A `sync_cloud.py` step pushes gold to **S3** and current state +
+predictions to **DynamoDB**; the deployed **Streamlit app** reads only from
+that cloud copy.
+
+Alongside the app runs an **Aviation Analyst Agent** — a separate,
+internal-only service (LangGraph + LLM + pgvector RAG) that the app calls over
+HTTP. It reads the same live cloud data (DynamoDB predictions/state, S3 gold
+features) through the same **read-only** credentials to answer flight-specific
+questions and explain predictions in natural language.
+
+The **local/cloud split** is the config toggle described above — everything
+left of `sync_cloud.py` runs on the local ingest machine regardless of backend;
+everything reading through `data_access.py` (the Streamlit app) and the agent's
+tools is backend-aware and reads whichever store is configured. Only the app
+and the agent's HTTP endpoint are exposed; all serving components read the cloud
+copy **read-only**.
 
 ## Repository navigation
 
@@ -188,15 +235,61 @@ its schema, and sample records; [`AeroFlux_DataDictionary.md`](AeroFlux_DataDict
 
 ## Setup
 
-**Prerequisites:** Python 3.11 (3.10–3.12 supported per `pyproject.toml`),
-Docker + Docker Compose, and either Conda (`environment.yml`) or Poetry/pip
-for the `aeroflux` package itself.
+**Prerequisites**
+
+If you plan to run this locally (on-prem, vs. cloud deployment) you will need at least the following:
+
+- **Python 3.11** (3.10–3.12 supported per `pyproject.toml`)
+- **Docker + Docker Compose** (tested with Docker v29.4.3)
+- **Conda** (`environment.yml`) for the base Python environment, and **Poetry** (or `pip`) for the `aeroflux` package itself
+- **Postgres** (started for you via Docker — see below) and optional **pgAdmin**
+- **SWIM credentials** for live FAA ingestion (see `.env.example`)
+
+> **Note:** The core infrastructure (Kafka, Postgres, and the deployed app) runs in Docker containers, orchestrated via `docker-compose.yml`. You don't install these services directly on your machine — Docker manages them for you.
+
+For more detail on the Python/package setup, see the [Downloading and Installing the Project](#downloading-and-installing-the-project) section.
 
 ```bash
 cd aeroflux
 python -m pip install -e .          # or: pip install poetry && poetry install
 cp .env.example .env                # fill in SWIM credentials + Postgres values
 ./run.sh setup                      # Kafka + Postgres up, topic + tables created
+```
+
+### Local Postgres
+
+`./run.sh setup` starts Postgres in Docker (via `docker-compose.yml`) and creates the required tables and Kafka topic automatically — you do **not** need to install Postgres separately. Default local connection:
+
+```bash
+postgresql://aeroflux:aeroflux-db@localhost:5432/aeroflux
+```
+
+To inspect the database, either connect with `psql`:
+
+```bash
+psql postgresql://aeroflux:aeroflux-db@localhost:5432/aeroflux
+```
+
+or use **pgAdmin** (optional) at `http://localhost:5050` if enabled in the compose file — log in and register a new server pointing at host `localhost`, port `5432`, with the credentials above.
+
+> **Note:** These are local development credentials for a throwaway container, not secrets. Production/cloud deployments use managed services and separate credentials (see `DEPLOYMENT.md`).
+
+### Running and Viewing the App Locally
+
+Once the stack is set up, bring up the full pipeline and UI:
+
+```bash
+source ~/aeroflux-cloud.env    # cloud backends (S3/DynamoDB); omit for local-only
+./e2e.sh up                    # starts ingest, scoring, sync, archive, and UI
+./e2e.sh health                # verify all stages are running
+```
+
+The Streamlit app is served at **http://localhost:8501** — open it in your browser to see the live flight map, live network overview, model performance, and analyst pages.
+
+To stop everything:
+
+```bash
+./e2e.sh down
 ```
 
 That's local infra only — no cloud dependency, no AWS account needed to
@@ -223,6 +316,9 @@ export STATE_BACKEND=dynamodb LAKE_BACKEND=s3 AWS_REGION=us-east-1 \
 ./e2e.sh up              # same command — now also syncs to S3/DynamoDB each cycle
 ```
 
+Expected output for system up with the system health check:
+![system up](images/system/system-up.png)
+
 Individual stages, if you want to run/inspect one at a time (see `e2e.sh`
 and `run.sh` for the full command set): `cmd_ingest` (SWIM bridge +
 consumer + ADS-B poller), `cmd_score` (score live gold), `cmd_sync_cloud`
@@ -231,6 +327,32 @@ consumer + ADS-B poller), `cmd_score` (score live gold), `cmd_sync_cloud`
 **View the live app:** [aeroflux.duckdns.org](https://aeroflux.duckdns.org)
 (always-on, cloud-backed) or `http://localhost:8501` when running `e2e.sh
 up`/`cmd_ui` locally.
+
+### Checking Logs
+
+Each pipeline stage writes to its own log under `logs/`. To follow a stage live:
+
+```bash
+tail -f logs/ingest.log         # SWIM ingestion
+tail -f logs/sync_cloud.log     # cloud sync (S3/DynamoDB)
+tail -f swim_to_kafka.log       # raw SWIM → Kafka bridge
+```
+
+For a quick health snapshot across all stages (process status, message flow, row counts):
+
+```bash
+./e2e.sh health
+```
+
+This reports whether each stage (ingest, score, sync, archive, UI) is running, and flags issues like a stalled ingest.
+
+Example health check output:
+
+![health check](images/system/health-check.png)
+
+Example log output:
+
+![ingest log](images/system/kafka-logs.png)
 
 ## Datasets
 
@@ -248,33 +370,83 @@ up`/`cmd_ui` locally.
 BTS training data and the gold/lake parquet are persistent, not
 time-windowed.
 
-## Reproducing results
+## Reproducing Results
 
-To reproduce training end-to-end you need:
+### The Production Model
 
-1. **BTS training data** — `scripts/build_bts_gold.py` fetches and caches
-   it (public, no credentials needed, just bandwidth/time for a multi-year
-   pull); or point `--cache` at an existing local cache.
+The deployed model was trained on **~11 years of BTS On-Time Performance data
+(2015–2025) joined with NCEI historical weather — roughly 70 million flight
+records.** Training is driven entirely by a YAML config
+(`aeroflux/configs/training.yaml`), so data range, features, model hyperparameters,
+compute backend, and outputs are all editable without touching code.
+
+### What You Need
+
+1. **BTS training data** — `scripts/build_bts_gold.py` fetches and caches it
+   (public, no credentials — just bandwidth/time for a multi-year pull), or
+   point `--cache` at an existing local cache.
 2. **Cached weather** — `data/weather` (NCEI) and the station→ICAO bridge
    (`data/reference/airport_to_station_2019.csv`), both bundled/fetchable.
-3. **Environment** — the Setup section above (`pip install -e .` /
-   `poetry install`); no cloud account needed for training or `pytest`.
-4. Then:
-   ```bash
-   python scripts/build_bts_gold.py --months 2015-01:2015-12 --cache data/bts \
-       --weather-cache data/weather --station-bridge data/reference/airport_to_station_2019.csv
-   python -m aeroflux_ml.training.cli train --config configs/training.yaml --gold <gold.parquet>
-   python -m pytest      # 97 tests
-   ```
+3. **Environment** — see [Setup](#setup) (`pip install -e .` / `poetry install`);
+   no cloud account needed for training or `pytest`.
 
-**What requires external access** (be aware before assuming a fully offline
-reproduction): a *live* run (`./run.sh stream` / `./e2e.sh up` without
-cloud vars) needs your own **FAA SWIM credentials** — SWIM access is
-account-gated by the FAA, not something this repo can provision for you.
-Syncing to the cloud or deploying the always-on app needs your own **AWS
-account** (S3 + DynamoDB + IAM, provisioned via `scripts/aws_setup.sh`) and
-a **Lightsail** (or equivalent) VM — see `DEPLOYMENT.md`. Training on BTS
-and running the test suite need neither.
+### Training
+
+Quick single-year run (fast, for validation):
+
+```bash
+python scripts/build_bts_gold.py --months 2015-01:2015-12 --cache data/bts \
+    --weather-cache data/weather --station-bridge data/reference/airport_to_station_2019.csv
+python -m aeroflux_ml.training.cli train --config configs/training.yaml --gold <gold.parquet>
+python -m pytest      # 97 tests
+```
+
+Full production-scale run (~11 years, ~70M records — requires significant time
+and memory and will most likly not run on a laptop. The model was trained on a system that had over 100 GB of RAM.):
+
+```bash
+python scripts/build_bts_gold.py --months 2013-01:2023-12 --cache data/bts \
+    --weather-cache data/weather --station-bridge data/reference/airport_to_station_2019.csv
+python -m aeroflux_ml.training.cli train --config configs/training.yaml --gold <gold.parquet>
+```
+
+### Configuring / Customizing the Model
+
+Training is YAML-driven (`configs/training.yaml`), deep-merged over sensible
+defaults — a minimal YAML still runs. Key options you can change without
+touching code:
+
+| Setting | Controls |
+|---|---|
+| `data.gold_path` / `data.target` | Training data and label column |
+| `split.strategy` (`time` \| `random`) | Time-aware split (default) vs. random |
+| `cv` / `tuning` | Cross-validation and hyperparameter grid search |
+| `models[].params` | XGBoost hyperparameters (`max_depth`, `learning_rate`, `n_estimators`, etc.) |
+| `compute.backend` (`local` \| `spark`) | Single-node Polars vs. distributed Spark |
+| `registry.backend` (`local` \| `mlflow`) | Local run registry vs. MLflow tracking |
+
+To train your own model, copy `configs/training.yaml`, edit the values, and pass
+it with `--config`. The default is a single XGBoost model with a time-aware
+80/20 split; enable `tuning.enabled` for grid search or `cv.enabled` for
+cross-validated evaluation.
+
+### Deploying a Trained Model Live
+
+A completed training run writes a model artifact to `model_outputs/runs/<run_name>/`.
+To serve it in the live pipeline, point the scoring stage at that run directory —
+the live scorer (`score_live.py`) loads `current_model.joblib` and applies the
+**same feature contract** used in training, so a model trained here scores live
+flights without modification. See `DEPLOYMENT.md` for wiring a new model into the
+deployed app.
+
+### What Requires External Access
+
+A *live* run (`./run.sh stream` / `./e2e.sh up` without cloud vars) needs your
+own **FAA SWIM credentials** — SWIM access is account-gated by the FAA. Syncing
+to the cloud or deploying the always-on app needs your own **AWS account** (S3 +
+DynamoDB + IAM, via `scripts/aws_setup.sh`) and a **Lightsail** (or equivalent)
+VM — see `DEPLOYMENT.md`. Training on BTS and running the test suite need
+neither.
 
 ---
 
@@ -298,97 +470,37 @@ git clone <REPO_URL>
 cd <REPO_FOLDER>
 ````
 
-Additional setup and development instructions will be added as the Stage 2 environment evolves.
-
-### Setups
-The following setup assumes you already have your IDE of choice installed (RStudio, JupyterLab or VSCode) and that you are already in your working directory of the project.
-
-If you need a different version of Python we can update the dependencies in the environment.yml. file. See the section on working with conda.
+For setting up the system see the above section on system setups.
 
 ### Downloading and Installing the Project
-To get started, download the repository and install the aeroflux package in editable mode so your environment picks up changes automatically:
+
+**Python environment.** AeroFlux targets **Python 3.11**. Create and activate an isolated environment first (conda shown; a `venv` works too):
 
 ```bash
-git clone <REPO_URL>
-cd <REPO_FOLDER>
-python -m pip install --upgrade pip
-python -m pip install -e .
+conda create -n aeroflux python=3.11 -y
+conda activate aeroflux
 ```
 
-If you prefer Poetry, you can use:
+Then install the `aeroflux` package. It is built and managed with **Poetry**, which is the preferred workflow:
 
 ```bash
 pip install poetry
 poetry install
 ```
 
-Note: the AeroFlux package is built and managed with Poetry, so this is the preferred workflow for local development and dependency management.
+This installs the package plus all dependencies into your active environment.
 
-### Environment Setup (Optional: Conda)
-
-Conda is optional. If you already use it, you can still create a shared environment with the provided `environment.yml` file. Otherwise, the editable package install workflow above is the recommended path.
-
----
-
-#### Optional Conda Setup
-
-If you want to use Conda, install it first:
-
-- Miniconda: https://docs.conda.io/en/latest/miniconda.html
-
-Then create and activate the environment:
+Alternatively, for a quick editable install without Poetry:
 
 ```bash
-conda env create -f environment.yml
-conda activate aeroflux2
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-### Installing New Packages
+### Installing and running Quarto (Optional)
 
-If you need to install new packages, update the environment in a way that keeps it reproducible for the team.
-
-#### Preferred Method (Recommended)
-
-Install packages using Conda:
-
-```bash
-# Python packages
-conda install -c conda-forge <package_name>
-
-# R packages (via conda)
-conda install -c conda-forge r-<package_name>
-```
-
-Examples:
-
-```bash
-conda install -c conda-forge polars
-```
-
-#### Using pip (Python only)
-
-Only use pip if the package is not available in Conda:
-
-```bash
-pip install <package_name>
-```
-
-### Updating the Environment File (IMPORTANT)
-
-After installing new packages, update the shared `environment.yml` file:
-
-```bash
-conda env export --from-history --no-builds | grep -v "^prefix:" > environment.yml
-```
-
----
-
-Summary notes:
-- Prefer conda install when possible for compatibility
-- Use pip only when a package is not available via Conda
-- Keep environment.yml updated for team reproducibility
-
-### Installing and running Quarto
+**This is only needed if you wish to update the informational `Project Site` (see below). This is not
+the actual AeroFlux application but a site for items such as papers.**
 
 Quarto is used to build our project site mentioned above. You will need Quarto if you want to make edits to any documents on the site pages.
 
@@ -405,7 +517,7 @@ quarto preview
 quarto preview <notebook>.qmd
 ```
 
-## Project Overview
+## Project Site Overview
 
 ### Website Structure and Key Pages (Quarto Overview)
 
@@ -418,6 +530,9 @@ The main site is built using **Quarto**, which converts `.qmd` (and `.ipynb`) fi
   Team bios and project context
 
 - **Project Proposal** → `aeroflux_stage2_proposal.qmd`  
+  Project Proposal
+
+- **Final Paper** → `aeroflux-final-paper.qmd`  
   Project Proposal
 
 More pages will be added as the project progresses.
@@ -441,11 +556,11 @@ More pages will be added as the project progresses.
 
 ---
 
-## Git Workflow for Maintaining and Contributing to the Quarto Site
+### Git Workflow for Maintaining and Contributing to the Quarto Site
 
 To keep the Quarto site stable and organized, all work should be done through feature branches rather than directly on `main`.
 
-### Recommended Step-by-Step Workflow
+#### Recommended Step-by-Step Workflow
 
 Note that you can also use the IDE extensions to do all of the following.
 
@@ -507,7 +622,7 @@ git branch -d feature/your-branch-name
 
 This is a general workflow. You may have to do some additional things if you get stuck.
 
-## Publish To Github Pages
+### Publish To Github Pages
 
 I added a github workflow ci-cd to automatically push to Github pages. So when you add your changes and push it should automatically push the quarto site too. Note: This will only work if you are working directly on main. If you are working on your own branch your work will show up once your branch has been merged into main. Make sure you run quarto render to render before pushing your changes.  
 
