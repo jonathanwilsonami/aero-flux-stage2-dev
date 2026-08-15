@@ -118,6 +118,34 @@ def _bulk_state() -> Optional[list[dict]]:
     return rows
 
 
+# A slower, unbounded fallback (aeroflux_ml.io's recent_flight_states(
+# limit=None), already supported, no new AWS infra needed) was tried and
+# deliberately NOT shipped here -- measured live, 2026-08-15:
+#   - Bounded single-page Scan (Limit=3000, 15000, 30000, and 60000 all
+#     tested): every one returned the IDENTICAL 1,634 items, in ~0.5s.
+#     Raising Limit did NOTHING -- because a single Scan call is capped
+#     at ~1MB of evaluated data per page regardless of Limit (DynamoDB's
+#     own ceiling, not a tuning knob), and this table's matching
+#     population apparently doesn't fit in one page. Confirmed: only 1 of
+#     11 real flight_key items under callsign "ENY3350" showed up in any
+#     bounded attempt.
+#   - Fully unbounded (limit=None, paginating through the whole table via
+#     LastEvaluatedKey): found all 11 -- but took 72.8s. That's over our
+#     60s HTTP timeout to the app, and would apply to EVERY miss,
+#     including the common, legitimate case of a genuinely-unknown flight
+#     -- turning an instant "not found" into a 70+ second hang. That's a
+#     worse regression than the bug it would fix, so it's not wired in.
+# Bottom line: a bounded Scan cannot reliably guarantee finding any given
+# flight at this table's current size, and there's no safe middle ground
+# between "one page" and "the whole table" without either a GSI on
+# callsign (a real Query, not a Scan -- the actual fix, not yet built:
+# it would roughly double write cost, the same tradeoff CLAUDE.md's
+# Gotchas already document rejecting once after a real ~$29 bill) or
+# extending io.py with genuine bounded multi-page pagination (a smaller
+# lift than a GSI, also not yet built). Both are real infrastructure
+# decisions, flagged for Jonathan rather than picked unilaterally.
+
+
 def _bulk_gold():
     """Bounded (single S3 GET, not per-flight) + cached read of gold
     features -- there's no per-flight-key indexed read available (the
@@ -140,14 +168,36 @@ def _bulk_gold():
 
 
 def _match_state(rows: list[dict], flight_number: Optional[str], callsign: Optional[str]) -> Optional[dict]:
+    """Matches by flight_number OR callsign -- try both, since a caller
+    may only know one, and some carriers never get an IATA flight_number
+    resolved at all (confirmed live, 2026-08-15: Envoy/"ENY" -- 11
+    distinct flight_key items under callsign "ENY3350", flight_number
+    null on every one; flight_number-only matching could never have
+    found this flight regardless of what the caller passed).
+
+    A callsign is a recurring schedule, not a single flight -- the same
+    callsign shows up as multiple distinct flight_key items across
+    different days/legs (also confirmed by that same trace). When more
+    than one row matches, prefer a non-COMPLETED one (a question like
+    "tell me about flight X" almost always means the current/upcoming
+    instance, not a stale historical one) and, among ties, the most
+    recently updated (`updated_at` is an ISO8601 UTC string -- sorts
+    lexicographically the same as chronologically, per
+    aeroflux_ml/io.py's DynamoDBStateRepository docstring)."""
     fn = (flight_number or "").upper()
     cs = (callsign or "").upper()
-    for r in rows:
-        if fn and str(r.get("flight_number") or "").upper() == fn:
-            return r
-        if cs and str(r.get("callsign") or "").upper() == cs:
-            return r
-    return None
+    candidates = [
+        r for r in rows
+        if (fn and str(r.get("flight_number") or "").upper() == fn)
+        or (cs and str(r.get("callsign") or "").upper() == cs)
+    ]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    active = [r for r in candidates if r.get("flight_status") != "COMPLETED"]
+    pool = active or candidates
+    return max(pool, key=lambda r: str(r.get("updated_at") or ""))
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +252,10 @@ def flight_query(flight_number: Optional[str] = None, callsign: Optional[str] = 
         if not match:
             return {"found": False, "source": "live",
                     "message": f"No matching flight in the live current-state set "
-                               f"(checked up to {len(rows)} recently-active flights)."}
+                               f"(checked up to {len(rows)} recently-active flights -- "
+                               f"a real flight can still be missed here if the table has "
+                               f"grown past what one Scan page covers, see tools.py's "
+                               f"comment above _match_state for the measured detail)."}
         return {
             "found": True,
             "source": "live",

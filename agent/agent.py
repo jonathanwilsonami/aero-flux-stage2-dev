@@ -27,7 +27,17 @@ from tools import (document_search, flight_query, model_inference, shap_explanat
 
 load_dotenv()
 
-FLIGHT_NUMBER_PATTERN = re.compile(r"\b[A-Z]{2}\d{2,4}\b")
+FLIGHT_NUMBER_PATTERN = re.compile(r"\b[A-Z]{2,3}\d{2,4}\b")
+# Widened from {2} to {2,3} letters, 2026-08-15: this pattern is really
+# "flight-number OR callsign", not just flight-number -- it used to only
+# match 2-letter IATA-style numbers ("AA2033"), silently missing every
+# 3-letter ICAO callsign ("ENY3350", "AAL1076", "SWA2606"...). Confirmed
+# for real: `flight_query("ENY3350")` failed for a flight that was
+# genuinely live in DynamoDB -- the regex never even extracted a token
+# to look up, prefetch never fired, and the LLM was left to either
+# hallucinate "unknown flight" or spontaneously call the tool with the
+# wrong parameter (see the fetch call below, and _match_state in
+# tools.py, for the second half of that bug).
 # Fleet-wide (no specific flight number) risk questions -- deterministically
 # prefetched below for the same reason per-flight data is: smaller models
 # are unreliable about remembering to call the right tool on their own (see
@@ -108,18 +118,22 @@ def document_search_tool(query: str) -> str:
 @tool
 def flight_query_tool(flight_number: str = "") -> str:
     """Look up a flight's current canonical state (status, route, times, position)
-    and its delay prediction if scored, by flight number (e.g. 'AA2033'). Live
-    current data when available, otherwise the demo dataset -- check the
-    result's "source" field."""
-    return json.dumps(flight_query(flight_number=flight_number or None))
+    and its delay prediction if scored, by flight number OR callsign (e.g.
+    'AA2033' or 'ENY3350' -- either format, this one field). Live current data
+    when available, otherwise the demo dataset -- check the result's "source"
+    field."""
+    ident = flight_number or None
+    return json.dumps(flight_query(flight_number=ident, callsign=ident))
 
 
 @tool
 def model_inference_tool(flight_number: str = "") -> str:
     """Get the delay prediction (probability + predicted_delayed) for a flight
-    by flight number. Live current prediction when available, otherwise the
-    demo dataset -- check the result's "source" field."""
-    return json.dumps(model_inference(flight_number=flight_number or None))
+    by flight number OR callsign (either format, this one field). Live
+    current prediction when available, otherwise the demo dataset -- check
+    the result's "source" field."""
+    ident = flight_number or None
+    return json.dumps(model_inference(flight_number=ident, callsign=ident))
 
 
 @tool
@@ -127,16 +141,20 @@ def shap_explanation_tool(flight_number: str = "") -> str:
     """Get the model's real input feature values behind a flight's delay
     prediction (propagation pressure, demand, weather, rotation) -- these are
     the actual data the model scored the flight on, NOT computed SHAP
-    contribution scores. Live when available, otherwise the demo dataset --
+    contribution scores. Takes a flight number OR callsign (either format,
+    this one field). Live when available, otherwise the demo dataset --
     check the result's "source" field."""
-    return json.dumps(shap_explanation(flight_number=flight_number or None))
+    ident = flight_number or None
+    return json.dumps(shap_explanation(flight_number=ident, callsign=ident))
 
 
 @tool
 def event_reconstruction_tool(flight_number: str = "") -> str:
-    """Get the recent event/state-change history for a flight. Demo dataset
-    only -- no live equivalent exists yet."""
-    return json.dumps(event_reconstruction(flight_number=flight_number or None))
+    """Get the recent event/state-change history for a flight, by flight
+    number OR callsign (either format, this one field). Demo dataset only --
+    no live equivalent exists yet."""
+    ident = flight_number or None
+    return json.dumps(event_reconstruction(flight_number=ident, callsign=ident))
 
 
 @tool
@@ -216,17 +234,25 @@ def prefetch_node(state: AgentState) -> AgentState:
     # (mutually exclusive -- a specific flight number takes priority).
     match = FLIGHT_NUMBER_PATTERN.search(question.upper())
     if match:
-        flight_number = match.group(0)
+        # The extracted token could be an IATA-style flight number
+        # ("AA2033") or an ICAO callsign ("ENY3350", "AAL1076") -- we
+        # can't tell which from the string alone, and for some carriers
+        # (confirmed live, 2026-08-15: Envoy/"ENY", carrier_iata never
+        # resolved) flight_number is genuinely null and callsign is the
+        # ONLY field that will ever match. Pass it as both; tools.py's
+        # _match_state() tries flight_number first, then callsign, so
+        # this can't double-match two different real flights.
+        ident = match.group(0)
         data = {
-            "flight_query": flight_query(flight_number=flight_number),
-            "model_inference": model_inference(flight_number=flight_number),
-            "shap_explanation": shap_explanation(flight_number=flight_number),
-            "event_reconstruction": event_reconstruction(flight_number=flight_number),
+            "flight_query": flight_query(flight_number=ident, callsign=ident),
+            "model_inference": model_inference(flight_number=ident, callsign=ident),
+            "shap_explanation": shap_explanation(flight_number=ident, callsign=ident),
+            "event_reconstruction": event_reconstruction(flight_number=ident, callsign=ident),
         }
         new_messages.append(
             SystemMessage(
                 content=(
-                    f"Retrieved data for flight {flight_number} (already "
+                    f"Retrieved data for flight {ident} (already "
                     f"fetched -- use it directly, do not call the flight "
                     f"tools again for this flight):\n{json.dumps(data, indent=2)}"
                 )
