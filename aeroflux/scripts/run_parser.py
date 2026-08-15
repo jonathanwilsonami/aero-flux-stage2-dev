@@ -52,12 +52,35 @@ def iter_file(pattern: str) -> Iterator[str]:
             yield fh.read()
 
 
-def iter_postgres(dsn: str, table: str, column: str, limit: int) -> Iterator[str]:
+def iter_postgres(dsn: str, table: str, column: str, limit: int,
+                   order_by: str | None = None) -> Iterator[str]:
+    """order_by is optional (None = old behavior, no ORDER BY) so this stays
+    safe for any table, not just swim.raw_messages -- but "no ORDER BY" +
+    LIMIT against a table taking continuous concurrent inserts/deletes
+    means Postgres can return an arbitrary, unstable subset of rows on
+    each call (confirmed live 2026-08-15: swim.raw_messages at 2.3M+ rows
+    vs. LIMIT=500000 covers roughly a fifth of the 48h retention window,
+    and without an explicit order the ~500k rows selected aren't
+    guaranteed recency-biased or even stable between cycles -- a flight's
+    raw messages could be sampled into one pipeline cycle's
+    flight_instance/gold and silently miss the next one, well before
+    actually aging out of retention). Callers that care about recency
+    (build_dataset.py's postgres source, via run.sh) should pass an
+    explicit order_by naming an indexed, NOT NULL recency column --
+    swim.raw_messages.stored_at is that column here (NOT NULL, already
+    has `idx_raw_messages_stored_at btree (stored_at DESC)`, and is the
+    same column retention/staleness-checks already treat as ground truth
+    elsewhere in this codebase)."""
     conn = _pg_connect(dsn)
     try:
         with conn.cursor() as cur:
-            # table/column are your own CLI inputs, not user data -> f-string is fine.
-            cur.execute(f"SELECT {column} FROM {table} LIMIT %s", (limit,))
+            # table/column/order_by are your own CLI inputs, not user data
+            # -> f-string is fine.
+            sql = f"SELECT {column} FROM {table}"
+            if order_by:
+                sql += f" ORDER BY {order_by}"
+            sql += " LIMIT %s"
+            cur.execute(sql, (limit,))
             for (value,) in cur.fetchall():
                 if value is None:
                     continue
@@ -178,6 +201,10 @@ def main() -> int:
     p_pg.add_argument("--table", required=True)
     p_pg.add_argument("--column", required=True, help="column holding the payload/envelope")
     p_pg.add_argument("--limit", type=int, default=500)
+    p_pg.add_argument("--order-by", default=None,
+                       help="e.g. 'stored_at DESC' -- biases LIMIT toward the "
+                            "newest rows instead of an arbitrary/unstable subset "
+                            "(recommended for any table taking concurrent inserts)")
 
     p_kafka = sub.add_parser("kafka", help="parse from a live/replayed topic")
     p_kafka.add_argument("--bootstrap", default="localhost:9092")
@@ -205,7 +232,8 @@ def main() -> int:
     if args.source == "file":
         raw_iter = iter_file(args.path)
     elif args.source == "postgres":
-        raw_iter = iter_postgres(args.dsn, args.table, args.column, args.limit)
+        raw_iter = iter_postgres(args.dsn, args.table, args.column, args.limit,
+                                  order_by=args.order_by)
     else:
         raw_iter = iter_kafka(args.bootstrap, args.topic, args.group, args.limit)
 

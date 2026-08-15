@@ -118,6 +118,10 @@ def main() -> int:
     pp = sub.add_parser("postgres")
     pp.add_argument("--dsn", required=True); pp.add_argument("--table", required=True)
     pp.add_argument("--column", required=True); pp.add_argument("--limit", type=int, default=5000)
+    pp.add_argument("--order-by", default=None,
+                     help="e.g. 'stored_at DESC' -- biases LIMIT toward the newest "
+                          "rows instead of an arbitrary/unstable subset (see "
+                          "run_parser.iter_postgres's docstring)")
     pk = sub.add_parser("kafka")
     pk.add_argument("--bootstrap", default="localhost:9092")
     pk.add_argument("--topic", default="swim.raw.flight")
@@ -139,7 +143,8 @@ def main() -> int:
     if args.source == "file":
         raw_iter = iter_file(args.path)
     elif args.source == "postgres":
-        raw_iter = iter_postgres(args.dsn, args.table, args.column, args.limit)
+        raw_iter = iter_postgres(args.dsn, args.table, args.column, args.limit,
+                                  order_by=args.order_by)
     else:
         raw_iter = iter_kafka(args.bootstrap, args.topic, args.group, args.limit)
 

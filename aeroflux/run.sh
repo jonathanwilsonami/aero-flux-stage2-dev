@@ -46,6 +46,17 @@ DSN="${DSN:-postgresql://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}}"
 COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml}"
 TOPIC="${KAFKA_TOPIC:-swim.raw.flight}"
 RAW_TABLE="${RAW_TABLE:-swim.raw_messages}"; RAW_COLUMN="${RAW_COLUMN:-raw_xml}"
+# Bias LIMIT toward the newest rows -- confirmed live 2026-08-15: no
+# ORDER BY here meant Postgres could return an arbitrary, unstable subset
+# of raw_messages each pipeline cycle (2.3M+ rows vs LIMIT=500000, no
+# guarantee of recency or even cycle-to-cycle stability), so a flight's
+# raw messages could be sampled into gold in one cycle and silently miss
+# the next, well before actually aging out of RETENTION_HOURS -- not a
+# timing lag, a real coverage gap. stored_at is NOT NULL, already has
+# idx_raw_messages_stored_at btree (stored_at DESC), and is the same
+# column retention/staleness-checks elsewhere already treat as ground
+# truth. Empty this (RAW_ORDER_BY=) to restore the old unordered behavior.
+RAW_ORDER_BY="${RAW_ORDER_BY:-stored_at DESC}"
 LIMIT="${LIMIT:-500000}"; LIVE="${LIVE:-100}"; OUT="${OUT:-$ROOT/out}"
 # Recycle interval for the underlying SWIM bridge process -- a safety
 # valve (memory/connection hygiene over very long runs), NOT the
@@ -150,6 +161,7 @@ cmd_pipeline(){
   log "Transform raw -> silver (ADS-B tails from the rolling store)"
   ( cd "$ROOT/scripts" && python build_dataset.py postgres --dsn "$DSN" \
       --table "$RAW_TABLE" --column "$RAW_COLUMN" --limit "$LIMIT" --live "$LIVE" \
+      ${RAW_ORDER_BY:+--order-by "$RAW_ORDER_BY"} \
       --adsb-store "$DSN" \
       --out-jsonl "$ROOT/dataset.jsonl" --out-csv "$ROOT/dataset.csv" )
   log "Load silver -> flight_instance"
