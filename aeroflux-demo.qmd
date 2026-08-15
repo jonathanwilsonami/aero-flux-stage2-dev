@@ -1,0 +1,58 @@
+---
+title: "AeroFlux Demo"
+---
+
+## Demo Videos
+
+Walkthroughs showcasing each part of the AeroFlux app.
+
+### Live Flight Map & Network Overview
+
+<video
+    autoplay
+    loop
+    muted
+    controls
+    playsinline
+    style="width: 100%; max-width: 1200px;"
+>
+    <source src="assets/videos/test.mp4" type="video/mp4">
+</video>
+
+_Walkthrough of the live flight map, the real-time network overview panels
+(flights tracked, carrier breakdown, delay-risk distribution), and how live
+data updates as flights move through the system._
+
+### Model Performance Page
+
+<video
+    autoplay
+    loop
+    muted
+    controls
+    playsinline
+    style="width: 100%; max-width: 1200px;"
+>
+    <source src="assets/videos/test.mp4" type="video/mp4">
+</video>
+
+_The model performance page — predictive metrics, feature importances, the
+lag-bucketed live evaluation, and the structural-coverage caveat on live
+outcome data._
+
+### Analyst Agent
+
+<video
+    autoplay
+    loop
+    muted
+    controls
+    playsinline
+    style="width: 100%; max-width: 1200px;"
+>
+    <source src="assets/videos/test.mp4" type="video/mp4">
+</video>
+
+_The Aviation Analyst Agent answering live flight questions — pulling real
+predictions, explaining delay risk through model features, and citing its
+sources._

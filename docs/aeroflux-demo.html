@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>About the Team – AeroFlux Stage 2 Project</title>
+<title>AeroFlux Demo – AeroFlux Stage 2 Project</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -37,6 +37,7 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-f418161beb48e0141c760e455f12af2c.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
@@ -97,7 +98,7 @@ ul.task-list li input[type="checkbox"] {
 <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link active" href="./about.html" aria-current="page"> 
+    <a class="nav-link" href="./about.html"> 
 <span class="menu-text">About</span></a>
   </li>  
   <li class="nav-item">
@@ -109,7 +110,7 @@ ul.task-list li input[type="checkbox"] {
 <span class="menu-text">Final Paper</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="./aeroflux-demo.html"> 
+    <a class="nav-link active" href="./aeroflux-demo.html" aria-current="page"> 
 <span class="menu-text">AeroFlux Demo</span></a>
   </li>  
 </ul>
@@ -120,60 +121,83 @@ ul.task-list li input[type="checkbox"] {
     </nav>
 </header>
 <!-- content -->
-<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-full page-navbar">
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
 <!-- margin-sidebar -->
-    
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#demo-videos" id="toc-demo-videos" class="nav-link active" data-scroll-target="#demo-videos">Demo Videos</a>
+  <ul class="collapse">
+  <li><a href="#live-flight-map-network-overview" id="toc-live-flight-map-network-overview" class="nav-link" data-scroll-target="#live-flight-map-network-overview">Live Flight Map &amp; Network Overview</a></li>
+  <li><a href="#model-performance-page" id="toc-model-performance-page" class="nav-link" data-scroll-target="#model-performance-page">Model Performance Page</a></li>
+  <li><a href="#analyst-agent" id="toc-analyst-agent" class="nav-link" data-scroll-target="#analyst-agent">Analyst Agent</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
 <!-- main -->
-<main class="content column-page" id="quarto-document-content">
+<main class="content" id="quarto-document-content">
 
-
-
-
-<div class="quarto-about-trestles column-page">
-  <div class="about-entity">
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">About the Team</h1>
+<h1 class="title">AeroFlux Demo</h1>
 </div>
-<div class="quarto-title-meta column-page">
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
   </div>
+  
+
+
 </header>
-  </div>
-  <div class="about-contents"><div id="hero-heading">
-<section id="jonathan-wilson" class="level2 fw-bold text-center mb-2 fs-2">
-<h2 class="fw-bold text-center mb-2 fs-2" data-anchor-id="jonathan-wilson"><a href="https://jonathanwil.com">Jonathan Wilson</a></h2>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="./images/about/jon.png" class="img-fluid figure-img" style="width:28.0%" alt="Jonathan Wilson"></p>
-<figcaption>Jonathan Wilson</figcaption>
-</figure>
-</div>
-<div class="small lh-sm">
-<p>Jonathan designs and builds intelligent systems at scale. After growing up working in construction, he earned a degree in Applied Statistics from Brigham Young University. He has since spent more than a decade building software across diverse domains, including DoD satellite systems, image processing, optimization, large-scale cybersecurity analytics, network engineering, monitoring, and data platforms. Today, his work focuses on designing data architectures, pipelines, and AI/ML platforms that support data science, modeling, simulation, and the analysis of large-scale systems while introducing agentic AI capabilities. He is currently pursuing a master’s degree in Data Analytics Engineering at George Mason University.</p>
-</div>
+
+
+<section id="demo-videos" class="level2">
+<h2 class="anchored" data-anchor-id="demo-videos">Demo Videos</h2>
+<p>Walkthroughs showcasing each part of the AeroFlux app.</p>
+<section id="live-flight-map-network-overview" class="level3">
+<h3 class="anchored" data-anchor-id="live-flight-map-network-overview">Live Flight Map &amp; Network Overview</h3>
+<video autoplay="" loop="" muted="" controls="" playsinline="" style="width: 100%; max-width: 1200px;">
+<source src="assets/videos/test.mp4" type="video/mp4">
+</video>
+<p><em>Walkthrough of the live flight map, the real-time network overview panels (flights tracked, carrier breakdown, delay-risk distribution), and how live data updates as flights move through the system.</em></p>
 </section>
-<section id="ryan-sollom" class="level2 fw-bold text-center mb-2 fs-2">
-<h2 class="fw-bold text-center mb-2 fs-2" data-anchor-id="ryan-sollom"><a href="https://www.linkedin.com/in/ryansollom/">Ryan Sollom</a></h2>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="./images/about/ryan.png" class="img-fluid figure-img" style="width:28.0%" alt="Ryan Sollom"></p>
-<figcaption>Ryan Sollom</figcaption>
-</figure>
-</div>
-<div class="small lh-sm">
-<p>Ryan is a senior consultant and graduate of Virginia Tech with a specialized understanding of data management and leading teams.</p>
-</div>
+<section id="model-performance-page" class="level3">
+<h3 class="anchored" data-anchor-id="model-performance-page">Model Performance Page</h3>
+<video autoplay="" loop="" muted="" controls="" playsinline="" style="width: 100%; max-width: 1200px;">
+<source src="assets/videos/test.mp4" type="video/mp4">
+</video>
+<p><em>The model performance page — predictive metrics, feature importances, the lag-bucketed live evaluation, and the structural-coverage caveat on live outcome data.</em></p>
+</section>
+<section id="analyst-agent" class="level3">
+<h3 class="anchored" data-anchor-id="analyst-agent">Analyst Agent</h3>
+<video autoplay="" loop="" muted="" controls="" playsinline="" style="width: 100%; max-width: 1200px;">
+<source src="assets/videos/test.mp4" type="video/mp4">
+</video>
+<p><em>The Aviation Analyst Agent answering live flight questions — pulling real predictions, explaining delay risk through model features, and citing its sources.</em></p>
 
 
 </section>
-</div></div>
-</div>
-
+</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
     const isCodeAnnotation = (el) => {
       for (const clz of el.classList) {
         if (clz.startsWith('code-annotation-')) {                     
