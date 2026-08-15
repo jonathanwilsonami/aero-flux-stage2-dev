@@ -357,19 +357,45 @@ never `agent.py`/`tools.py`) can still run standalone against the agent's
 pgvector with no key at all — useful for seeding the doc corpus before the
 key is ready (see §9).
 
+### 5.15 — Widening a Docker build context to the repo root needs its own `.dockerignore`
+Wiring Level 3 (§9) meant `agent/Dockerfile`'s build context had to widen
+from `agent/` to the repo root, to `COPY` in the sibling `aeroflux_ml`
+package (same reason 5.6 widened the UI's context). Neither the repo root
+nor `aeroflux/` had a `.dockerignore` at the time — hadn't mattered before,
+because `aeroflux_ui/streamlit_app/Dockerfile`'s own context
+(`aeroflux/`) never included anything as large as what the repo root
+does. Running `docker build -f agent/Dockerfile .` locally to test would
+have sent `aeroflux/data` (34G) + `aeroflux/bts_out` (14G) +
+`agent/.venv` (6.2G) — 54GB+ of nothing the Dockerfile actually
+`COPY`s — as build context. Found before it actually happened (checked
+`du -sh` on the relevant directories before the first real build attempt,
+not after a suspiciously slow one) and fixed with a new root
+`.dockerignore` — an explicit deny-list of the known-large/irrelevant
+paths, not a wildcard `*` + `!allow` pattern, since Docker's semantics
+for re-including a path under a parent that was itself excluded are
+finicky enough not to trust under time pressure. Confirmed the fix
+worked by watching the actual "transferring context" size in the build
+output (240.75kB, not 54GB) before letting the full build run.
+
 ---
 
 ## 9. Agent deployment (Aviation Operations Analyst) — Option A, internal-only
 
-Deployed 2026-08-14. **Option A: a second container on the existing
-Lightsail box**, not a separate instance — chosen after actually measuring
-(`docker stats`, not guessing) that the full stack fits comfortably: app +
-caddy + agent + agent's own pgvector use **~776MiB (~20%) of the box's
-3.747GiB**, ~2.5Gi still available. The documented fallback (move the
-agent to its own small instance) wasn't needed. See `AGENT_INTEGRATION.md`
-for the wire contract and the read-only-SSO cloud-data-access path (still
-the future step — the agent currently reads sample data, not live
-S3/DynamoDB, regardless of where it's deployed).
+Deployed 2026-08-14 (HTTP wiring), extended the same day to read live
+cloud data (Level 3 — see below and `AGENT_INTEGRATION.md` §2). **Option
+A: a second container on the existing Lightsail box**, not a separate
+instance — chosen after actually measuring (`docker stats`, not
+guessing) that the full stack fits comfortably. Level 2 (HTTP wiring
+only): app + caddy + agent + agent's own pgvector used ~776MiB (~20%) of
+the box's 3.747GiB. Level 3 (live DynamoDB/S3 reads — boto3/polars/
+xgboost/scikit-learn added to the agent image) pushed that to
+**~1.28GiB total (~34%)**, ~2.4Gi still available. The documented
+fallback (move the agent to its own small instance) still wasn't needed.
+See `AGENT_INTEGRATION.md` for the wire contract (§1), the live
+cloud-data-read path (§2, now implemented — not the future step it used
+to say), and the credentials note (§3 — reuses the app's own
+`aeroflux-app` identity, a deliberate deviation from the original
+separate-identity plan).
 
 **Two new services in `docker-compose.lightsail.yml`, both internal-only —
 no host port published for either, and Caddy only proxies `app`. Nothing
@@ -391,12 +417,18 @@ Compose's own service-name DNS:**
   (local-dev-style credentials, matching `agent/docker-compose.yml`'s
   local ones — not real secrets, and not reachable from outside the box's
   Docker network regardless).
-- `agent.env_file: agent.env` (`required: false`) — **`GROQ_API_KEY` lives
-  here, on the box only** (`/home/ubuntu/aeroflux-app/agent.env`,
-  `chmod 600`). Never committed, never touches the GitHub Action — same
-  discipline as `app`'s own `.env`, just a separate file for a separate
-  secret (different service, different credential, independently
-  rotatable).
+- `agent.env_file` is now a LIST of two files (Level 3, 2026-08-14):
+  - `.env` — the **same file `app` already reads**, not a copy of its
+    values. Carries the real `aeroflux-app` read-only AWS creds
+    (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`) and
+    `STATE_BACKEND=dynamodb`/`LAKE_BACKEND=s3`/`S3_BUCKET`/
+    `DYNAMODB_TABLE` — this is what makes `agent/tools.py`'s live reads
+    work. One file to rotate/update, not two to keep in sync.
+  - `agent.env` (`required: false`) — **`GROQ_API_KEY` lives here, on the
+    box only** (`/home/ubuntu/aeroflux-app/agent.env`, `chmod 600`).
+    Never committed, never touches the GitHub Action — separate file for
+    a separate secret (different service, different credential,
+    independently rotatable), unrelated to the AWS creds above.
 - `agent-pgvector`'s schema init: `agent/sql/init.sql` scp'd to
   `REMOTE_DIR/agent-sql/init.sql` and mounted read-only at
   `/docker-entrypoint-initdb.d/init.sql` — the box doesn't have the repo
@@ -410,7 +442,35 @@ exactly — build+push `ghcr.io/jonathanwilsonami/aeroflux-agent` on
 variable (one gate for the whole box; deliberately not a second variable
 to remember). The deploy step only touches `agent`+`agent-pgvector`
 (`pull` + `up -d --force-recreate` those two service names specifically),
-never `app`/`caddy` — that's `deploy-ui.yml`'s job.
+never `app`/`caddy` — that's `deploy-ui.yml`'s job. As of Level 3, the
+trigger paths also include `aeroflux/aeroflux_ml/**` (see below) — a
+change there now rebuilds the agent image too, not just `deploy-ui.yml`'s.
+
+**Level 3 — live cloud data (2026-08-14):** `agent/tools.py`'s
+`flight_query`/`model_inference`/`shap_explanation`/`at_risk_flights`
+read live DynamoDB current-state + predictions and S3 gold features,
+through the same `aeroflux_ml.io` abstraction `data_access.py` uses — see
+`AGENT_INTEGRATION.md` §2 for the tool-by-tool detail (what each reads,
+the bounded-Scan + 120s-cache discipline, and why `shap_explanation`
+returns real feature values, not computed SHAP scores). Making that
+possible needed three build-side changes:
+- `agent/Dockerfile`'s build context widened from `agent/` to the **repo
+  root**, so it can `COPY aeroflux/aeroflux_ml ./aeroflux_ml` alongside
+  `agent/`'s own files (`docker build -f agent/Dockerfile .`, not
+  `... agent/` anymore).
+- A new **root-level `.dockerignore`** — required once the context became
+  the repo root, see Gotcha §5.15 below for why this wasn't optional.
+- `agent/requirements.txt` gained `polars`/`boto3`/`pyyaml` (what
+  `aeroflux_ml.io` itself needs) plus `requests`/`xgboost`/`joblib` (what
+  the rest of `aeroflux_ml/__init__.py`'s eager imports pull in) — the
+  exact list `aeroflux_ui/streamlit_app/requirements.txt` already proved
+  necessary for the same `import aeroflux_ml`.
+
+Image grew from ~5.88GB (Level 2) to ~6.61GB; runtime memory grew from
+~576MiB to ~1.11GiB steady-state (see this section's intro for the
+full-stack total). Sample-data fallback unchanged — every live read is
+wrapped, falls through to `data/sample_flights.json` on any failure, same
+"always demos" discipline as the app.
 
 **Doc corpus ingestion** — `agent/ingest.py` doesn't import `agent.py`/
 `tools.py` (only `embeddings.py`), so it needs no Groq key and can run
@@ -441,6 +501,14 @@ Confirmed 2026-08-14: real Groq answer, correct `📎 Sources:` citation,
 zero exceptions — both via this in-container check and a direct internal
 HTTP call to `http://agent:8010/ask` from inside `aeroflux-ui`.
 
+Re-confirmed the same way after Level 3 shipped, same day, with a real
+flight: "tell me about flight AA1076" returned its real `PLANNED` status,
+real route, a delay probability that visibly changed between repeated
+checks (proof it's live, not cached-forever), and real gold feature
+values; "what flights are most at risk right now" returned a real ranked
+list via the new `at_risk_flights` tool.
+
 **Gotchas hit getting this working:** see §5.13 (compose's own stale
-healthcheck override) and §5.14 (`ChatGroq()` fails at import time, not
-first call, if the key is missing).
+healthcheck override), §5.14 (`ChatGroq()` fails at import time, not
+first call, if the key is missing), and §5.15 (repo-root build context
+needs its own `.dockerignore`).
