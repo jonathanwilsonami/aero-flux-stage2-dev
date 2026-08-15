@@ -54,6 +54,20 @@ transcript.
   command that echoes the whole file to append/modify it.
 - To confirm a variable is *set* (not its value): test its effect — does the
   AWS call succeed, does the DB connect — rather than printing it.
+- **`sed`'s `&` in a replacement re-inserts the ENTIRE matched text, not
+  just the part you captured.** A "redaction" like `sed -E
+  's/^([A-Za-z_]+)[=:].*/\1 <redacted> (&)/'` looks safe (it names a
+  capture group) but `&` still expands to the whole original match —
+  since the pattern's `.*` matched the whole line, `&` prints the whole
+  line right back, secret value included. This nearly leaked a real key
+  (2026-08-14). Only ever reference `\1`/`\2` (explicit numbered capture
+  groups) in a redaction replacement — never `&`, and never a bare `.*`
+  capture that could swallow the secret itself into a group you then
+  print. When in doubt, don't build a redaction one-liner under time
+  pressure — use the existence/name-only checks above instead (`grep -c`,
+  `grep -oE '^[A-Za-z_]+='` for names only, `grep -noE
+  '^[A-Za-z_]+:'` for malformed-line detection) — none of them need to
+  touch the value at all.
 - If a secret is ever exposed in a transcript or log despite this, say so
   plainly and recommend rotation; don't just quietly move on.
 
