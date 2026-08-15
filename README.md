@@ -75,8 +75,15 @@ Walkthroughs showcasing each part of the AeroFlux app.
 
 ### Live Flight Map & Network Overview
 
-<video autoplay loop muted controls width="100%">
-  <source src="assets/videos/test.mp4" type="video/mp4">
+<video
+    autoplay
+    loop
+    muted
+    controls
+    playsinline
+    style="width: 100%; max-width: 1200px;"
+>
+    <source src="assets/videos/test.mp4" type="video/mp4">
 </video>
 
 _Walkthrough of the live flight map, the real-time network overview panels
