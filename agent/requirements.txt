@@ -11,3 +11,14 @@ python-dotenv>=1.0.0
 pypdf>=4.0.0
 tiktoken>=0.7.0
 numpy>=1.26.0
+# below: pulled in transitively by `import aeroflux_ml` (state_backend_from_env /
+# lake_backend_from_env, Level 3 -- see tools.py) -- same list
+# aeroflux_ui/streamlit_app/requirements.txt already proved necessary for the
+# exact same import (found there by trial: aeroflux_ml/__init__.py eagerly
+# imports its whole package tree, not just io.py).
+polars>=1.0
+boto3
+pyyaml>=6
+requests>=2.31
+xgboost>=2.0
+joblib>=1.3

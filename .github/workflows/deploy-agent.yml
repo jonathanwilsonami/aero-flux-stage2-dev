@@ -11,6 +11,10 @@ on:
     branches: [main]
     paths:
       - "agent/**"
+      # Level 3 (2026-08-14): tools.py's live cloud reads COPY in
+      # aeroflux_ml (see agent/Dockerfile) -- a change there needs the
+      # agent image rebuilt too, not just deploy-ui.yml's image.
+      - "aeroflux/aeroflux_ml/**"
       - ".github/workflows/deploy-agent.yml"
   workflow_dispatch: {}
 
@@ -54,7 +58,11 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: agent
+          # Repo root, not agent/ -- Level 3 needs the sibling
+          # aeroflux/aeroflux_ml package in the build context (see
+          # agent/Dockerfile's comment). Root .dockerignore keeps this
+          # from sending aeroflux/data, aeroflux/bts_out, etc.
+          context: .
           file: agent/Dockerfile
           push: true
           tags: |

@@ -64,19 +64,28 @@ services:
     depends_on:
       - app
 
-  # --- Aviation Operations Analyst agent (Level 2 integration) -----------
+  # --- Aviation Operations Analyst agent (Level 3 integration) -----------
   # Internal only, on purpose: neither service below publishes a host
   # port, and Caddy only proxies `app`. The only way to reach the agent
   # is from inside this box's Docker network (i.e. from `app`, via
   # AEROFLUX_AGENT_URL above) -- nothing external can hit it directly.
-  # Data access stays sample-based for now (agent/tools.py's
-  # data/sample_flights.json) -- swapping to the real S3/DynamoDB read
-  # path is a separate fast-follow, see AGENT_INTEGRATION.md.
+  # tools.py reads live current-state + predictions from DynamoDB and
+  # gold features from S3 (2026-08-14) using the SAME read-only
+  # aeroflux-app credentials `app` uses, through the same aeroflux_ml.io
+  # abstraction data_access.py does -- falls back to sample data if
+  # cloud is unreachable or unconfigured, same discipline as the app.
   agent:
     image: ghcr.io/jonathanwilsonami/aeroflux-agent:${AGENT_IMAGE_TAG:-latest}
     container_name: aeroflux-agent
     restart: unless-stopped
     env_file:
+      # Same file `app` reads above -- the read-only aeroflux-app AWS
+      # creds (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_REGION) and
+      # STATE_BACKEND=dynamodb/LAKE_BACKEND=s3/S3_BUCKET/DYNAMODB_TABLE
+      # live here already -- reusing it (not copying values into a
+      # second file) means one place to rotate, not two to keep in sync.
+      - path: .env
+        required: false
       # GROQ_API_KEY lives here, on the box only -- never committed, never
       # touches the GitHub Action. Not the same file as `app`'s .env
       # above (different service, different secret).

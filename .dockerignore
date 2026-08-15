@@ -1,0 +1,28 @@
+# Repo-root .dockerignore -- needed because agent/Dockerfile's build
+# context is the repo root (not just agent/), so tools.py's Level 3 cloud
+# reads can COPY in the sibling aeroflux/aeroflux_ml package. Without
+# this, `docker build -f agent/Dockerfile .` sends the WHOLE repo as
+# build context -- found doing exactly that locally (2026-08-14):
+# aeroflux/data (34G) + aeroflux/bts_out (14G) + agent/.venv (6.2G) is
+# 54GB+ of nothing the Dockerfile actually COPYs.
+.git
+aeroflux/data
+aeroflux/bts_out
+aeroflux/out
+aeroflux/logs
+aeroflux/model_outputs
+aeroflux/notes
+aeroflux/dataset.csv
+aeroflux/dataset.jsonl
+aeroflux/*.log
+agent/.venv
+agent/.env
+**/__pycache__
+**/*.pyc
+notes
+images
+docs
+.quarto
+*.qmd
+*.docx
+*.pdf
