@@ -286,9 +286,104 @@ contract, training pipeline, live scoring, E2E orchestration, demo UI (incl.
 Model Performance analyst page), cloud storage backends (S3/DynamoDB) with
 `data_access.py` reading through them and write cost cut ~18x, live-
 prediction evaluation (`evaluate_live.py`, per-lag-bucket), Lightsail
-deployment with fully automated CI deploy now verified working, and
-`AGENT_INTEGRATION.md`. 97 tests pass. See `PROJECT_CONTEXT.md` §Roadmap and
-`DEPLOYMENT.md` for the deploy flow. Next: the live-eval sample maturing
-(right-censored, self-correcting — don't trust today's AUC), the Spark batch
-analytics job (still open from the original AWS-storage plan), and wiring
-Ryan's agent against `AGENT_INTEGRATION.md`'s contract.
+deployment with fully automated CI deploy now verified working,
+`AGENT_INTEGRATION.md`, and — as of 2026-08-14/15 — Ryan's agent fully
+wired and deployed (HTTP + citations + live DynamoDB/S3 reads, see
+§Session Handoff below for the full current state). 97 tests pass. See
+`PROJECT_CONTEXT.md` §Roadmap and `DEPLOYMENT.md` for the deploy flow.
+Next: the live-eval sample maturing (right-censored, self-correcting —
+don't trust today's AUC), the Spark batch analytics job (still open from
+the original AWS-storage plan), and the presentation-phase wrap-up items
+in §Session Handoff.
+
+## Session Handoff (2026-08-15)
+Read this first if picking up mid-stream — full detail is in git history/
+prior session logs, this is the fast-orientation version.
+
+**Just happened:** Pushed + deployed `4762a7a` (agent flight-lookup fix —
+`FLIGHT_NUMBER_PATTERN` widened to also match 3-letter ICAO callsigns
+like "ENY3350" (was 2-letter-only), and every flight tool now passes the
+extracted token as both `flight_number=` and `callsign=` since some
+carriers — confirmed live, Envoy/"ENY" — never get an IATA `flight_number`
+resolved at all, so callsign is the ONLY field that will ever match).
+**Confirmed live** on the deployed agent (not just locally): asked the
+real deployed agent about ENY3350 (found, 3.5s), AA1076 (regression
+check, still works, 0.9s), and a made-up flight ZZ9999 (correctly and
+instantly "not found," 0.6s — proving a slower fallback design that was
+built, measured, and deliberately NOT shipped didn't sneak in). Nothing
+outstanding on this specific fix.
+
+**System state, right now:**
+- **4 containers on the Lightsail box** (`aeroflux.duckdns.org`):
+  `aeroflux-ui` (Streamlit app, public via Caddy), `aeroflux-caddy` (TLS
+  reverse proxy), `aeroflux-agent` (Ryan's LangGraph/RAG agent, FastAPI on
+  `:8010`, internal-only — no host port), `aeroflux-agent-pgvector`
+  (agent's own doc-corpus DB, internal-only, separate from AeroFlux's main
+  Postgres). Memory: ~1.28GiB/3.747GiB total (~34%), comfortable headroom.
+- **Agent is at Level 3**: reads live current-state + predictions from
+  DynamoDB and gold features from S3, through the same
+  `aeroflux_ml.io.state_backend_from_env()`/`lake_backend_from_env()`
+  abstraction `data_access.py` uses, with the SAME read-only `aeroflux-app`
+  AWS credentials the app has (shared `.env` file on the box, not a
+  copy — see `DEPLOYMENT.md` §9 / `AGENT_INTEGRATION.md` §2-3). Sample-data
+  fallback preserved if cloud is unreachable. Tools:
+  `flight_query`/`model_inference`/`shap_explanation` (real gold feature
+  values, explicitly NOT SHAP scores)/`at_risk_flights` (fleet-wide, new).
+  `event_reconstruction` stays sample-only (no live event-history source
+  exists). HTTP contract: `POST /ask {question, history} -> {answer,
+  citations}`, rendered in `2_Analyst.py`.
+- **Auto-deploy via GitHub Actions**: `deploy-ui.yml` (triggers on
+  `aeroflux/aeroflux_ui/**`) and `deploy-agent.yml` (triggers on
+  `agent/**` and `aeroflux/aeroflux_ml/**`), both gated by the
+  `DEPLOY_ENABLED` repo **Variable** (not Secret — bit us once), both
+  verified working hands-off end-to-end.
+- **`AGENT_INTEGRATION.md` and `DEPLOYMENT.md` are already current** —
+  both were updated (commit `c17095e`) to describe Level 3 as
+  implemented, not future. No doc-sync debt there.
+
+**Known open items (not urgent, need a human decision, not more building):**
+1. **Bounded DynamoDB Scan can still occasionally miss a real flight.**
+   `flight_query`'s fast lookup is `recent_flight_states(limit=3000)` — a
+   single-page Scan. Measured live (2026-08-15): raising `Limit` up to
+   60000 changed nothing (DynamoDB caps a single Scan page at ~1MB of
+   evaluated data, not by the `Limit` number). A fully unbounded,
+   paginated scan finds everything but takes ~73s — over the 60s
+   app→agent HTTP timeout, and would slow down every genuinely-unknown-
+   flight lookup too, so it was built, measured, and explicitly not
+   shipped. Real fix is one of: a GSI on `callsign` (a true Query, not a
+   Scan — but roughly doubles write cost, the same tradeoff already
+   rejected once after the real ~$29 DynamoDB bill), or bounded multi-page
+   pagination added to `aeroflux_ml/io.py` (smaller lift, not built).
+   Needs Jonathan's call given the cost history.
+2. **Agent reuses `aeroflux-app`'s own AWS identity**, not a separate
+   read-only one — a deliberate, documented deviation from the original
+   plan (`AGENT_INTEGRATION.md` §3), fine for now, a quick follow-up if
+   audit/rotate-independently ever becomes a real requirement.
+3. Live-eval sample still maturing (right-censoring artifact, not a bug —
+   see `PROJECT_CONTEXT.md` § Known Limitations). Spark batch analytics
+   job never built (original AWS-storage plan item 4, still open).
+
+**Wrap-up remaining (presentation phase — writing/exporting, not
+building):**
+- Architecture diagram: `arch_diagrams/aeroflux_architecture-final.drawio`
+  has newer exports appearing under `images/design/`
+  (`aeroflux-arch-final.png`, `aeroflux-architecture-final.svg`) —
+  evidence of active work outside this session (uncommitted local
+  changes present as of 2026-08-15); confirm it's the version actually
+  wired into the README/paper before presenting.
+- README: rewritten and pushed (`4cebeab`) — confirmed landed on
+  `origin/main`, nothing pending there.
+- Final paper (`aeroflux-final-paper.qmd`) — in progress, not tracked by
+  this session's work.
+- Slides/video — not yet started, as of this handoff.
+
+**Hard rules already in this file — don't rediscover, just scroll up:**
+`## Secrets handling` (never cat/tail/head/echo `.env`; the `sed`'s `&`
+redaction gotcha lives here too), `## Lifecycle/teardown testing` (test
+teardown/kill commands against throwaway processes or an isolated
+worktree, never the live stack — broke ingest for hours once), the
+duplicate-stack guard (`e2e.sh up` refuses a second stack by default,
+`FORCE=1` to override), and the DynamoDB cost lessons under `## Gotchas`
+(writes were the real ~$29 driver, not reads — a GSI was evaluated and
+rejected for doubling write cost; unbounded `Scan` reads the whole table,
+~30s+, always bound with `Limit`).
