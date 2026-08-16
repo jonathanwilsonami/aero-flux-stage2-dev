@@ -381,6 +381,25 @@ records.** Training is driven entirely by a YAML config
 (`aeroflux/configs/training.yaml`), so data range, features, model hyperparameters,
 compute backend, and outputs are all editable without touching code.
 
+### Model Performance
+
+the metrics below are on the held-out test set (n ≈ 13.8M).
+
+#### Baseline vs. Advanced Model
+
+| Metric | Logistic Regression (baseline) | XGBoost (advanced) |
+|---|---|---|
+| ROC-AUC | 0.699 | **0.877** |
+| PR-AUC | 0.416 | **0.735** |
+| F1 | 0.425 | **0.618** |
+| Accuracy | 0.726 | **0.813** |
+| Brier score | 0.218 | **0.141** |
+
+The propagation-, demand-, and weather-aware **XGBoost** model improves ROC-AUC
+by **+0.178** and nearly doubles PR-AUC over the flight-level logistic baseline,
+confirming that network-context features (rotation, airport demand, weather)
+carry substantial predictive signal for delay propagation.
+
 ### What You Need
 
 1. **BTS training data** — `scripts/build_bts_gold.py` fetches and caches it

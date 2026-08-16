@@ -3,6 +3,10 @@ title: "AeroFlux Demo"
 lightbox: true
 ---
 
+## Arch Diagram 
+![Arch Diagram](images/design/aeroflux-architecture-final.svg)
+
+
 ## Demo Videos
 
 Walkthroughs showcasing each part of the AeroFlux.

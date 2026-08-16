@@ -228,14 +228,21 @@
     "href": "aeroflux-demo.html",
     "title": "AeroFlux Demo",
     "section": "",
-    "text": "Walkthroughs showcasing each part of the AeroFlux.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nAWS CloudWatch Dashboard"
+    "text": "Arch Diagram"
+  },
+  {
+    "objectID": "aeroflux-demo.html#arch-diagram",
+    "href": "aeroflux-demo.html#arch-diagram",
+    "title": "AeroFlux Demo",
+    "section": "",
+    "text": "Arch Diagram"
   },
   {
     "objectID": "aeroflux-demo.html#demo-videos",
     "href": "aeroflux-demo.html#demo-videos",
     "title": "AeroFlux Demo",
-    "section": "",
-    "text": "Walkthroughs showcasing each part of the AeroFlux.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nAWS CloudWatch Dashboard"
+    "section": "Demo Videos",
+    "text": "Demo Videos\nWalkthroughs showcasing each part of the AeroFlux.\n\nAeroFlux Dashboard View\n\n\n\n\n\nLive Flight Map & Network Overview\n\n\n\n\n\nLive Inference\n\n\n\n\n\nModel Performance Page\n\n\n\n\n\nAnalyst Agent\n\n\nFull Integration\n\n\n\n\n\nAeroFlux Cloud Monitoring & Observability\n\n\n\nAWS CloudWatch Dashboard\n\n\n\n\nOperations On-Prem\n\n\n\n\n\nProject Setup"
   },
   {
     "objectID": "aeroflux_stage2_proposal.html",
