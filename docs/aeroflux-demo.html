@@ -43,6 +43,9 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="site_libs/bootstrap/bootstrap-8b9b450fba28b21070ed4f8d6716e9d1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="dark">
+<script src="site_libs/quarto-contrib/glightbox/glightbox.min.js"></script>
+<link href="site_libs/quarto-contrib/glightbox/glightbox.min.css" rel="stylesheet">
+<link href="site_libs/quarto-contrib/glightbox/lightbox.css" rel="stylesheet">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -136,6 +139,10 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#live-inference" id="toc-live-inference" class="nav-link" data-scroll-target="#live-inference">Live Inference</a></li>
   <li><a href="#model-performance-page" id="toc-model-performance-page" class="nav-link" data-scroll-target="#model-performance-page">Model Performance Page</a></li>
   <li><a href="#analyst-agent" id="toc-analyst-agent" class="nav-link" data-scroll-target="#analyst-agent">Analyst Agent</a></li>
+  <li><a href="#full-integration" id="toc-full-integration" class="nav-link" data-scroll-target="#full-integration">Full Integration</a></li>
+  <li><a href="#aeroflux-cloud-monitoring-observability" id="toc-aeroflux-cloud-monitoring-observability" class="nav-link" data-scroll-target="#aeroflux-cloud-monitoring-observability">AeroFlux Cloud Monitoring &amp; Observability</a></li>
+  <li><a href="#operations-on-prem" id="toc-operations-on-prem" class="nav-link" data-scroll-target="#operations-on-prem">Operations On-Prem</a></li>
+  <li><a href="#project-setup" id="toc-project-setup" class="nav-link" data-scroll-target="#project-setup">Project Setup</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -191,9 +198,30 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="analyst-agent" class="level3">
 <h3 class="anchored" data-anchor-id="analyst-agent">Analyst Agent</h3>
+</section>
+<section id="full-integration" class="level3">
+<h3 class="anchored" data-anchor-id="full-integration">Full Integration</h3>
 <video autoplay="" loop="" muted="" controls="" playsinline="" style="width: 100%; max-width: 1200px;">
-<source src="assets/videos/test.mp4" type="video/mp4">
+<source src="assets/videos/af-integrated-demo-v2.mp4" type="video/mp4">
 </video>
+</section>
+<section id="aeroflux-cloud-monitoring-observability" class="level3">
+<h3 class="anchored" data-anchor-id="aeroflux-cloud-monitoring-observability">AeroFlux Cloud Monitoring &amp; Observability</h3>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><a href="images/system/aeroflux-cloud-observability.png" class="lightbox" data-gallery="quarto-lightbox-gallery-1" title="AWS CloudWatch Dashboard"><img src="images/system/aeroflux-cloud-observability.png" class="img-fluid figure-img" alt="AWS CloudWatch Dashboard"></a></p>
+<figcaption>AWS CloudWatch Dashboard</figcaption>
+</figure>
+</div>
+</section>
+<section id="operations-on-prem" class="level3">
+<h3 class="anchored" data-anchor-id="operations-on-prem">Operations On-Prem</h3>
+<video autoplay="" loop="" muted="" controls="" style="width: 100%; max-width: 1200px;">
+<source src="assets/videos/ops-on-prem-demo.mp4" type="video/mp4">
+</video>
+</section>
+<section id="project-setup" class="level3">
+<h3 class="anchored" data-anchor-id="project-setup">Project Setup</h3>
 
 
 </section>
@@ -601,6 +629,38 @@ ul.task-list li input[type="checkbox"] {
   });
   </script>
 </div> <!-- /content -->
+<script>var lightboxQuarto = GLightbox({"closeEffect":"zoom","descPosition":"bottom","loop":false,"openEffect":"zoom","selector":".lightbox"});
+(function() {
+  let previousOnload = window.onload;
+  window.onload = () => {
+    if (previousOnload) {
+      previousOnload();
+    }
+    lightboxQuarto.on('slide_before_load', (data) => {
+      const { slideIndex, slideNode, slideConfig, player, trigger } = data;
+      const href = trigger.getAttribute('href');
+      if (href !== null) {
+        const imgEl = window.document.querySelector(`a[href="${href}"] img`);
+        if (imgEl !== null) {
+          const srcAttr = imgEl.getAttribute("src");
+          if (srcAttr && srcAttr.startsWith("data:")) {
+            slideConfig.href = srcAttr;
+          }
+        }
+      } 
+    });
+  
+    lightboxQuarto.on('slide_after_load', (data) => {
+      const { slideIndex, slideNode, slideConfig, player, trigger } = data;
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(slideNode);
+      }
+    });
+  
+  };
+  
+})();
+          </script>
 
 
 

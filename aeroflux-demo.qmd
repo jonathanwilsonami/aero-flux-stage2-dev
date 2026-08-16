@@ -1,5 +1,6 @@
 ---
 title: "AeroFlux Demo"
+lightbox: true
 ---
 
 ## Demo Videos
@@ -60,6 +61,8 @@ Walkthroughs showcasing each part of the AeroFlux.
 
 ### Analyst Agent
 
+### Full Integration 
+
 <video
     autoplay
     loop
@@ -68,5 +71,22 @@ Walkthroughs showcasing each part of the AeroFlux.
     playsinline
     style="width: 100%; max-width: 1200px;"
 >
-    <source src="assets/videos/test.mp4" type="video/mp4">
+    <source src="assets/videos/af-integrated-demo-v2.mp4" type="video/mp4">
 </video>
+
+### AeroFlux Cloud Monitoring & Observability 
+
+![AWS CloudWatch Dashboard](images/system/aeroflux-cloud-observability.png)
+
+### Operations On-Prem 
+<video
+    autoplay
+    loop
+    muted
+    controls
+    style="width: 100%; max-width: 1200px;"
+>
+    <source src="assets/videos/ops-on-prem-demo.mp4" type="video/mp4">
+</video>
+
+### Project Setup 
