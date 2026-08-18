@@ -20,6 +20,7 @@
 - [Datasets](#datasets)
 - [Reproducing results](#reproducing-results)
 - [Contributing and Repository Access](#contributing-and-repository-access)
+- [Project Site Overview](#project-site-overview)
 
 ---
 
@@ -212,7 +213,8 @@ aeroflux/
 │   ├── pipeline.py, run.py       #   silver -> gold pipeline + CLI
 │   └── training/                 #   config-driven training pipeline (see below)
 ├── aeroflux_ui/streamlit_app/   # the demo UI
-│   ├── app.py, data_access.py    #   entry point; cloud-aware reads (local/S3+DynamoDB)
+│   ├── app.py, data_access.py    #   entry point (Live Network Overview landing
+│   │                              #   section) + cloud-aware reads (local/S3+DynamoDB)
 │   └── pages/                    #   Live Map, Analyst (agent chat), Live Inference,
 │                                  #   Model Performance (live eval + feature importances)
 ├── scripts/                 # build_bts_gold.py, sync_cloud.sh, aws_setup.sh,
@@ -221,6 +223,10 @@ aeroflux/
 ├── run.sh                   # live ingestion orchestrator (setup/stream/status/stop)
 ├── e2e.sh                   # full train -> serve -> sync -> UI orchestration
 └── tests/                   # 97 tests: parse, ML, training, sync, live-eval
+
+agent/                        # LangGraph + Groq + pgvector RAG — the Aviation
+                               #   Analyst Agent (separate service, internal-only;
+                               #   called by the UI's Analyst page over HTTP)
 ```
 
 **Docs** (repo root): [`CLAUDE.md`](CLAUDE.md) — operational quick-reference
