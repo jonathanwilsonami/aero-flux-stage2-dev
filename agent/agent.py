@@ -182,8 +182,14 @@ class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
 
 
+# 2026-08-18: llama-3.3-70b-versatile was retired from Groq's available
+# models -- every request started failing. Replaced with openai/gpt-oss-120b
+# (currently available on Groq, supports tool calling + structured outputs,
+# which this agent depends on for flight_query/model_inference/etc.).
+GROQ_MODEL_DEFAULT = "openai/gpt-oss-120b"
+
 llm = ChatGroq(
-    model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    model=os.environ.get("GROQ_MODEL", GROQ_MODEL_DEFAULT),
     temperature=0,
 ).bind_tools(ALL_TOOLS)
 
@@ -191,7 +197,7 @@ llm = ChatGroq(
 # without this, the model can respond to the guardrail prompt with another
 # tool call instead of text, leaving nothing to display.
 llm_no_tools = ChatGroq(
-    model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    model=os.environ.get("GROQ_MODEL", GROQ_MODEL_DEFAULT),
     temperature=0,
 )
 
