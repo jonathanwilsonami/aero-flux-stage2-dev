@@ -50,3 +50,4 @@ build/
 
 !agent/data/*.json
 !agent/eval/*.json
+assets/videos/*.mp4
