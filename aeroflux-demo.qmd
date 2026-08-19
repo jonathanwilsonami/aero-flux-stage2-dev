@@ -3,11 +3,19 @@ title: "AeroFlux Demo"
 lightbox: true
 ---
 
-## Arch Diagram 
-![Arch Diagram](images/design/aeroflux-architecture-final.svg)
+## AeroFlux Presentation 
+<video
+    autoplay
+    loop
+    muted
+    controls
+    playsinline
+    style="width: 100%; max-width: 1200px;"
+>
+    <source src="assets/videos/final-presentation.mp4" type="video/mp4">
+</video>
 
-
-## Demo Videos
+## Mini Demos
 
 Walkthroughs showcasing each part of the AeroFlux.
 
@@ -63,8 +71,6 @@ Walkthroughs showcasing each part of the AeroFlux.
     <source src="assets/videos/af-model-performance-demo.mp4" type="video/mp4">
 </video>
 
-### Analyst Agent
-
 ### Full Integration 
 
 <video
@@ -94,3 +100,7 @@ Walkthroughs showcasing each part of the AeroFlux.
 </video>
 
 ### Project Setup 
+Coming Soon...
+
+## Arch Diagram 
+![Arch Diagram](images/design/aeroflux-architecture-final.svg)

@@ -67,7 +67,7 @@
     "href": "aeroflux-final-paper.html",
     "title": "AeroFlux Stage 2: A Scalable, Portable Big-Data Platform for Real-Time Flight-Delay Intelligence",
     "section": "",
-    "text": "Course: AIT 614 Sec 001\nInstructor: Dr. Duoduo Liao\nInstitution: George Mason University"
+    "text": "Warning🚧 Paper Under Construction\n\n\n\nPlanned completion by close of September 2026."
   },
   {
     "objectID": "aeroflux-final-paper.html#problem-statement",
@@ -224,25 +224,18 @@
     "text": "Ryan Sollom\n\n\n\nRyan is a senior consultant and graduate of Virginia Tech with a specialized understanding of data management and leading teams."
   },
   {
-    "objectID": "aeroflux-demo.html",
-    "href": "aeroflux-demo.html",
+    "objectID": "aeroflux-demo.html#mini-demos",
+    "href": "aeroflux-demo.html#mini-demos",
     "title": "AeroFlux Demo",
-    "section": "",
-    "text": "Arch Diagram"
+    "section": "Mini Demos",
+    "text": "Mini Demos\nWalkthroughs showcasing each part of the AeroFlux.\n\nAeroFlux Dashboard View\n\n\n\n\n\nLive Flight Map & Network Overview\n\n\n\n\n\nLive Inference\n\n\n\n\n\nModel Performance Page\n\n\n\n\n\nFull Integration\n\n\n\n\n\nAeroFlux Cloud Monitoring & Observability\n\n\n\nAWS CloudWatch Dashboard\n\n\n\n\nOperations On-Prem\n\n\n\n\n\nProject Setup\nComing Soon…"
   },
   {
     "objectID": "aeroflux-demo.html#arch-diagram",
     "href": "aeroflux-demo.html#arch-diagram",
     "title": "AeroFlux Demo",
-    "section": "",
-    "text": "Arch Diagram"
-  },
-  {
-    "objectID": "aeroflux-demo.html#demo-videos",
-    "href": "aeroflux-demo.html#demo-videos",
-    "title": "AeroFlux Demo",
-    "section": "Demo Videos",
-    "text": "Demo Videos\nWalkthroughs showcasing each part of the AeroFlux.\n\nAeroFlux Dashboard View\n\n\n\n\n\nLive Flight Map & Network Overview\n\n\n\n\n\nLive Inference\n\n\n\n\n\nModel Performance Page\n\n\n\n\n\nAnalyst Agent\n\n\nFull Integration\n\n\n\n\n\nAeroFlux Cloud Monitoring & Observability\n\n\n\nAWS CloudWatch Dashboard\n\n\n\n\nOperations On-Prem\n\n\n\n\n\nProject Setup"
+    "section": "Arch Diagram",
+    "text": "Arch Diagram\n\n\n\nArch Diagram"
   },
   {
     "objectID": "aeroflux_stage2_proposal.html",

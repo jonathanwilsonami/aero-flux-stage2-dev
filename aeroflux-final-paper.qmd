@@ -4,7 +4,8 @@ subtitle: "Final Project Report"
 author:
   - Jonathan Wilson
   - Ryan Sollom
-date: "2026-08-20"
+  - Et al.
+date: "2026-11-01"
 date-format: "MMMM D, YYYY"
 format:
   html:
@@ -31,6 +32,12 @@ csl: apa.csl
 cite-method: citeproc
 lightbox: true
 ---
+
+::: {.callout-warning}
+## 🚧 Paper Under Construction
+
+Planned completion by **close of September 2026**.
+:::
 
 :::: {.content-visible when-format="html"}
 ::: {.callout-note appearance="minimal"}
